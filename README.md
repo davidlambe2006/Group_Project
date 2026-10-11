@@ -35,3 +35,7 @@ Investment & Portfolio Decision Dashboard
 - Panel 2 — Risk Analysis: volatility, Sharpe ratio, max drawdown
 - Panel 3 — Diversification: correlations and how combining assets changes risk
 - Panel 4 — Portfolio Builder: user selects risk tolerance → suggested asset weights / efficient frontier
+
+print("Hello World")
+
+
