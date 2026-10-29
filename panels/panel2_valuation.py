@@ -1,5 +1,5 @@
-import plotly.express as px
 import yfinance as yf
+import plotly.express as px
 import pandas as pd
 
 tickers=[
@@ -7,6 +7,7 @@ tickers=[
     'META','AVGO','AMD','TSM',
     'ORCL','PLTR','TSLA','ASML'
 ]
+
 sector_map = {
     "NVDA": "Semiconductors",
     "MSFT": "Software & Cloud",
@@ -31,7 +32,6 @@ sectors=[]
 for ticker in tickers:
     company=yf.Ticker(ticker)
     info=company.info
-    print(ticker, info.get("marketCap"))
 
     companies.append(info.get('shortName'))
     market_caps.append(info.get('marketCap'))
@@ -49,11 +49,6 @@ for ticker in tickers:
     else:
         eps_growth.append(None)
 
-
-print(companies)
-print(market_caps)
-print(forward_pe)
-print(eps_growth)
 
 df=pd.DataFrame({
     'Company': companies,
@@ -100,21 +95,16 @@ def show_panel2():
             line=dict(width=2, color='rgba(225,255,255,0.95)')
         ),
         textposition="middle center",
-        textfont=dict(
-            size=11, 
-            color="white"
-            )
-    )
+        )
+        
+
     fig.update_layout(
         template='plotly_dark',
         paper_bgcolor='#031A2F',
         plot_bgcolor='#031A2F',
-        font=dict(
-            color='white',
-            family='Arial'),
+        margin=dict(r=250),
         title=dict(
             x=.5,
-            xanchor='center',
             font=dict(size=24, weight='bold'),
         ),    
         xaxis=dict(
@@ -122,7 +112,9 @@ def show_panel2():
             showline=True,
             linecolor='white',
             linewidth=2,
-            gridcolor='#243449'
+            gridcolor='#243449',
+            griddash='dash',
+            zeroline=False
         ),
         yaxis=dict(
             title_text="<b>Forward P/E</b>",
@@ -133,6 +125,8 @@ def show_panel2():
             linecolor='white',
             linewidth=2,
             gridcolor='#243449',
+            griddash='dash',
+            zeroline=False,
             minor=dict(
                 showgrid=False,
                 ticks=''
@@ -142,10 +136,64 @@ def show_panel2():
             bgcolor='#061426',
             font_color='white',
             bordercolor='#00D4FF'
+        ),
+        legend=dict(
+            title="Sector",
+            x=1.02,
+            y=1,
+            bgcolor="#061426",
+            bordercolor="#1E3A5F",
+            borderwidth=2,
         )
-    )    
+    )
 
-    fig.update_layout(legend_title_text='Sector')
+    # Market Cap legend box
+    fig.add_shape(
+        type="rect",
+        xref="paper", yref="paper",
+        x0=1.02, x1=1.20,
+        y0=0.30, y1=0.70,
+        line=dict(color="#1E3A5F", width=2),
+        fillcolor="#061426"
+    )
+
+    # Market Cap legend title
+    fig.add_annotation(
+        x=1.105, y=0.67,
+        xanchor="center",
+        xref="paper", yref="paper",
+        text="<b>Market Cap ($T)</b>",
+        showarrow=False,
+        font=dict(size=14, color="white")
+    )
+
+    # Three different-sized circles
+    for cap, size, y in [
+        (0.5, 20, 0.59),
+        (1.0, 35, 0.49),
+        (2.0, 50, 0.36)
+    ]:
+        fig.add_shape(
+            type="circle",
+            xref="paper", yref="paper",
+            xsizemode="pixel",
+            ysizemode="pixel",
+            xanchor=1.05,
+            yanchor=y,
+            x0=-size/2, x1=size/2,
+            y0=-size/2, y1=size/2,
+            line=dict(color="white", width=2),
+            fillcolor="#607D9F"
+        )
+
+        fig.add_annotation(
+            x=1.1, y=y,
+            xref="paper", yref="paper",
+            text=f"${cap:.1f}T",
+            showarrow=False,
+            xanchor="left",
+            font=dict(size=12, color="white")
+        )
     fig.show()
 
 show_panel2()
