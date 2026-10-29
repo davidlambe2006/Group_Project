@@ -1,24 +1,61 @@
 import plotly.express as px
+import yfinance as yf
+import pandas as pd
 
-companies=['NVIDIA', 'Microsoft', 'Alphabet', 'Amazon','Meta']
+tickers=[
+    'NVDA','MSFT','GOOGL','AMZN',
+    'META','AVGO','AMD','TSM',
+    'ORCL','PLTR','TSLA','ASML'
+]
 
-eps_growth=[50,15,20,25,30]
+for ticker in tickers:
+    company=yf.Ticker(ticker)
+    info=company.info
 
-forward_pe=[40,30,22,35,25]
+    print('Company:', info.get('shortName'))
+    print('Market Cap:', info.get('marketCap'))
+    print('Forward P/E:', info.get('forwardPE'))
+    print('------------------------')
 
-market_cap=[4500, 3800, 3200, 2500, 1800]
+sectors=[
+    'Semiconductors',
+    'Software & Cloud',
+    'Software & Cloud',
+    'Software & Cloud',
+    'Consumer & EV'
+]
 
 def show_panel2():
     fig=px.scatter(
         x=eps_growth,
         y=forward_pe,
         size=market_cap,
+        color=sectors,
         hover_name=companies,
+        hover_data={
+            'Market Cap ($bn)': market_cap,
+            'Sector': sectors
+        },
         labels={
             'x':'Expected EPS Growth (%)',
             'y':'Forward P/E Ratio'
         }, 
         title='AI Companies: Valuation vs Earnings Growth'
+    )
+    fig.update_layout(
+        template='plotly_dark',
+        paper_bgcolor='#061426',
+        plot_bgcolor='#061426',
+        font=dict(color='white'),
+        title_font=dict(size=20),
+        xaxis=dict(
+            showgrid=True,
+            gridcolor='#243449',
+            ),
+            yaxis=dict(
+                showgrid=True,
+                gridcolor='#243449'
+            )
     )
     fig.show()
 
