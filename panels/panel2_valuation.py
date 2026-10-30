@@ -91,7 +91,7 @@ def show_panel2():
     )
     fig.update_traces(
         marker=dict(
-            opacity=0.92,
+            opacity=0.75,
             line=dict(width=2, color='rgba(225,255,255,0.95)')
         ),
         textposition="middle center",
@@ -102,7 +102,7 @@ def show_panel2():
         template='plotly_dark',
         paper_bgcolor='#031A2F',
         plot_bgcolor='#031A2F',
-        margin=dict(r=250),
+        margin=dict(r=250, t=170),
         title=dict(
             x=.5,
             font=dict(size=24, weight='bold'),
@@ -146,7 +146,24 @@ def show_panel2():
             borderwidth=2,
         )
     )
-
+    # Subtitle
+    fig.add_annotation(
+        x=0.59, y=1.2,
+        xref="paper", yref="paper",
+        xanchor="center",
+        text="Assessing Whether Projected Earnings Growth Supports Current Market Valuations",
+        showarrow=False,
+        font=dict(size=15, color="white")
+        )
+    # Additional information
+    fig.add_annotation(
+        x=0.59, y=1.15,
+        xref="paper", yref="paper",
+        xanchor="center",
+        text="Bubble Size = Market Capitalisation ($T) | Forward P/E on Logarithmic Scale",
+        showarrow=False,
+        font=dict(size=13, color="#00D4FF")
+        )
     # Market Cap legend box
     fig.add_shape(
         type="rect",
