@@ -136,21 +136,13 @@ def show_panel2():
         y=y_line,
         mode='lines',
         name='Regression Line',
+        showlegend=False,
+        hoverinfo='skip',
         line=dict(
             color='#FFD166',
             width=3,
             dash='dash'
         )
-    )
-
-    #Display regression R-Squared
-    fig.add_annotation(
-        x=.098, y=.095,
-        xref='paper', yref='paper',
-        xanchor='right',
-        text=f"<b>R² = {r_squared:.4f}</b>",
-        showarrow=False,
-        font=dict(size=14, color='#FFD166')
     )
 
     #Adjust buuble transparency, borders and ticker positions
@@ -160,6 +152,7 @@ def show_panel2():
             line=dict(width=2, color='rgba(225,255,255,0.95)')
         ),
         textposition="middle center",
+        selector=dict(mode='markers+text')
         )
 
     #Apply dark theme and customize layout, axes, hover labels, and legend
@@ -206,7 +199,7 @@ def show_panel2():
         legend=dict(
             title='<b>Sector</b>',
             x=1.02,
-            y=1,
+            y=1.00,
             bgcolor='#061426',
             bordercolor='#1E3A5F',
             borderwidth=2,
@@ -217,7 +210,7 @@ def show_panel2():
         x=0.59, y=1.2,
         xref='paper', yref='paper',
         xanchor='center',
-        text='Assessing Whether Projected Earnings Growth Supports Current Market Valuations',
+        text='Exploring the Relationship Between Expected Earnings Growth and Equity Valuations',
         showarrow=False,
         font=dict(size=15, color='white')
         )
@@ -235,14 +228,14 @@ def show_panel2():
         type='rect',
         xref='paper', yref='paper',
         x0=1.02, x1=1.20,
-        y0=0.30, y1=0.70,
+        y0=0.31, y1=0.70,
         line=dict(color='#1E3A5F', width=2),
         fillcolor='#061426'
     )
 
     # Market Cap legend title
     fig.add_annotation(
-        x=1.105, y=0.67,
+        x=1.105, y=0.685,
         xanchor='center',
         xref='paper', yref='paper',
         text='<b>Market Cap ($T)</b>',
@@ -252,16 +245,16 @@ def show_panel2():
 
     # Create a custom legend showing market cap through bubble sizes
     for cap, size, y in [
-        (0.5, 20, 0.59),
-        (1.0, 35, 0.49),
-        (2.0, 50, 0.36)
+        (0.5, 20, 0.61),
+        (1.0, 35, 0.51),
+        (2.0, 50, 0.385)
     ]:
         fig.add_shape(
             type='circle',
             xref='paper', yref='paper',
             xsizemode='pixel',
             ysizemode='pixel',
-            xanchor=1.05,
+            xanchor=1.06,
             yanchor=y,
             x0=-size/2, x1=size/2,
             y0=-size/2, y1=size/2,
@@ -278,6 +271,99 @@ def show_panel2():
             xanchor='left',
             font=dict(size=12, color='white')
         )
+
+    #Regression analysis box
+    fig.add_shape(
+        type='rect',
+        xref='paper', yref='paper',
+        x0=1.02, x1=1.20,
+        y0=0.01, y1=0.29,
+        line=dict(color='#1E3A5F', width=2),
+        fillcolor='#061426'
+    )
+
+    #Regression box title
+    fig.add_annotation(
+        x=1.11, y=0.255,
+        xanchor='center',
+        yanchor='middle',
+        xref='paper', yref='paper',
+        text='<b>Regression Analysis</b>',
+        showarrow=False,
+        font=dict(size=13, color='white')
+    )
+
+    #Interpret the regression fit
+    fig.add_annotation(
+        x=1.11, y=0.14,
+        xanchor='center',
+        xref='paper', yref='paper',
+        text='Very Weak Relationship',
+        showarrow=False,
+        font=dict(size=11, color='white')
+    )
+
+    #Interpreation annotion
+    interpretation_index=len(fig.layout.annotations)-1
+
+    #Store the position of the R-squared annotation
+    r2_index=len(fig.layout.annotations)  
+    
+    # Store the index of the R-squared annotation
+    fig.add_annotation(
+        x=1.11, y=0.185,
+        xanchor='center',
+        xref='paper', yref='paper',
+        text=f"<b>R² = {r_squared:.6f}</b>",
+        showarrow=False,
+        font=dict(size=15, color='#FFD166')
+    )
+    #Identify the regression line
+    regression_trace_index=len(fig.data)-1
+
+    #Toggle regression analysis on and off
+    fig.update_layout(
+        updatemenus=[
+            dict(
+                type='buttons',
+                direction='right',
+                showactive=True,
+                active=0,
+                x=1.11,
+                y=0.09,
+                xanchor='center',
+                yanchor='middle',
+                bgcolor='#607D9F',
+                bordercolor='#00D4FF',
+                borderwidth=1,
+                font=dict(size=12, color='#061426'),
+                pad=dict(l=2,r=2,t=2,b=2),
+                buttons=[
+                    dict(
+                        label='On',
+                        method='update',
+                        args=[
+                            {'visible':True},
+                            {f'annotations[{r2_index}].visible':True,
+                             f'annotations[{interpretation_index}].visible':True},
+                            [regression_trace_index]
+                        ]
+                    ),    
+                    dict(
+                        label='Off',
+                        method='update',
+                        args=[
+                            {'visible':False},
+                            {f'annotations[{r2_index}].visible':False,
+                             f'annotations[{interpretation_index}].visible':False},
+                            [regression_trace_index]
+                        ]
+                )
+            ]
+        )
+    ]
+)
+
     #Display completed interactive chart    
     fig.show()
 
