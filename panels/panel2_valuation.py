@@ -3,12 +3,13 @@ import plotly.express as px
 import pandas as pd
 import numpy as np
 
-# Define the list of AI-related company tickers and their corresponding sectors
-tickers=[
-    'NVDA','MSFT','GOOGL','AMZN',
-    'META','AVGO','AMD','TSM',
-    'ORCL','PLTR','TSLA','ASML'
+# Companies and sectors used for bubble colours.
+tickers = [
+    'NVDA', 'MSFT', 'GOOGL', 'AMZN',
+    'META', 'AVGO', 'AMD', 'TSM',
+    'ORCL', 'PLTR', 'TSLA', 'ASML'
 ]
+
 sector_map = {
     "NVDA": "Semiconductors",
     "MSFT": "Software & Cloud",
@@ -24,126 +25,88 @@ sector_map = {
     "ASML": "Semiconductors"
 }
 
-# Initialize lists to store company data
-companies=[]
-market_caps=[]
-forward_pe=[]
-eps_growth=[]
-sectors=[]
 
-#Retrieve data for each ticker using yfinance
-for ticker in tickers:
-    try:
-        company=yf.Ticker(ticker)
-        info=company.info
-
-        companies.append(
-            info.get('displayName') or info.get('shortName') or ticker
-        )
-        market_caps.append(info.get('marketCap'))
-        forward_pe.append(info.get('forwardPE'))
-        sectors.append(sector_map[ticker])
-        #Retrieved next years estimated EPS growth
-        estimates = company.earnings_estimate
-        
-        if estimates is not None and '+1y' in estimates.index:
-            growth=estimates.loc['+1y','growth']
-            
-            #Convert growth to a percetage if data is available
-            if pd.notna(growth):
-                eps_growth.append(growth*100)
-            else:
-                eps_growth.append(None)
-        else:
-            eps_growth.append(None)
-            
-    except Exception as e:
-        print(f"Error retrieving data for {ticker}: {e}")
-        companies.append(ticker)
-        market_caps.append(None)
-        forward_pe.append(None)
-        eps_growth.append(None)
-        sectors.append(sector_map[ticker]) 
-
-# Create a DataFrame to hold the collected data
-df=pd.DataFrame({
-    'Company': companies,
-    'Ticker': tickers,
-    'Market Cap ($T)': [
-        #Convert Market Cap from dollars to trillions 
-        round(cap/1e12,2) if cap is not None else None
-        for cap in market_caps
-    ],    
-    'Forward P/E': forward_pe,
-    'Expected EPS Growth (%)': eps_growth,
-    'Sector': sectors
-})
-
-#Calculate regression line between EPS growth and log forward P/E
-regression_df=df.dropna(
-    subset=['Expected EPS Growth (%)','Forward P/E']
-)
-regression_df=regression_df[
-    (regression_df['Forward P/E']>0) &
-    np.isfinite(regression_df['Forward P/E']) &
-    np.isfinite(regression_df['Expected EPS Growth (%)'])
-]
-x=regression_df['Expected EPS Growth (%)']
-y=np.log(regression_df['Forward P/E'])
-
-if len(x)>=2 and len(x.unique())>=2:
-    slope, intercept=np.polyfit(x,y,1)
-    
-    #Calculate R-squared
-    y_pred=intercept + slope*x
-    
-    ss_res=np.sum((y - y_pred)**2)
-    ss_tot=np.sum((y - np.mean(y))**2)
-    r_squared=1 - (ss_res/ss_tot) if ss_tot != 0 else 0 #Avoid division by zero
-    print(f"R-squared: {r_squared:.6f}")
-
-else:
-    slope=None
-    intercept=None
-    r_squared=None
-    print('Insufficient data to calculate regression')
+NUMERIC_COLS = ['Market Cap ($T)', 'Forward P/E', 'Expected EPS Growth (%)']
 
 
-def show_panel2():
+def load_valuation_data(selected_tickers):
+    """Download Yahoo Finance valuation metrics for the requested companies.
+
+    A failed ticker is recorded with missing values so other tickers still load.
     """
-    Creates an interactive scatter plot comparing AI companies
-    based on expected EPS growth and forward P/E ratios.
+    rows = []
+    failed_tickers = []
 
-    Bubble sizes represent market capitalisation, whilecolors 
-    indicate sectors. The P/E axis uses a logarithmic scale.
-    """
+    for ticker in selected_tickers:
+        name, cap, pe, growth_pct = ticker, None, None, None
+        try:
+            company = yf.Ticker(ticker)
+            info = company.info
+            name = info.get('displayName') or info.get('shortName') or ticker
+            cap = info.get('marketCap')
+            pe = info.get('forwardPE')
 
-    chart_df=df.copy()
-    numeric_cols=[
-        'Market Cap ($T)',
-        'Forward P/E',
-        'Expected EPS Growth (%)'
-    ]
-    chart_df[numeric_cols]=chart_df[numeric_cols].apply(
+            # Earnings-estimate growth is a fraction; convert to percentage.
+            estimates = company.earnings_estimate
+            if estimates is not None and '+1y' in estimates.index:
+                growth = estimates.loc['+1y', 'growth']
+                if pd.notna(growth):
+                    growth_pct = growth * 100
+        except Exception as error:
+            failed_tickers.append(ticker)
+            print(f"Error retrieving data for {ticker}: {error}")
+
+        # One dictionary per ticker avoids misaligned separate data lists.
+        rows.append({
+            'Company': name,
+            'Ticker': ticker,
+            'Market Cap ($T)': cap / 1e12 if cap is not None else None,
+            'Forward P/E': pe,
+            'Expected EPS Growth (%)': growth_pct,
+            'Sector': sector_map.get(ticker, 'Other'),
+        })
+
+    return pd.DataFrame(rows, columns=[
+        'Company', 'Ticker', *NUMERIC_COLS, 'Sector'
+    ]), failed_tickers
+
+
+def prepare_chart_data(df):
+    """Remove missing/invalid bubble inputs; negative EPS growth is allowed."""
+    cleaned = df.copy()
+    cleaned[NUMERIC_COLS] = cleaned[NUMERIC_COLS].apply(
         pd.to_numeric, errors='coerce'
-    )
-    chart_df[numeric_cols]=chart_df[numeric_cols].replace(
-        [np.inf, -np.inf], np.nan
-    )
+    ).replace([np.inf, -np.inf], np.nan)
 
-    chart_df=chart_df.dropna(
-        subset=numeric_cols
-    )
+    chart_df = cleaned.dropna(subset=NUMERIC_COLS).copy()
+    chart_df = chart_df[
+        (chart_df['Forward P/E'] > 0) &
+        (chart_df['Market Cap ($T)'] > 0)
+    ].copy()
+    return chart_df
 
-    chart_df=chart_df[
-        (chart_df['Forward P/E']>0) &
-        (chart_df['Market Cap ($T)']>0)
-    ]
-    #Check whether any companies have valid data after filtering
-    if chart_df.empty:
-        print("No valid valuation data available to display.")
-        return
 
+def calculate_regression(chart_df):
+    """Fit log(forward P/E) against expected EPS growth; return fit statistics."""
+    # Using the displayed companies keeps the line consistent with the bubbles.
+    x = chart_df['Expected EPS Growth (%)']
+    y = np.log(chart_df['Forward P/E'])
+
+    # A slope needs at least two distinct X-values; R² needs variation in Y.
+    if len(x) < 2 or x.nunique() < 2 or y.nunique() < 2:
+        return None, None, None, x
+
+    slope, intercept = np.polyfit(x, y, 1)
+    predicted = intercept + slope * x
+    ss_total = np.sum((y - y.mean()) ** 2)
+    ss_residual = np.sum((y - predicted) ** 2)
+    r_squared = 1 - ss_residual / ss_total
+    return slope, intercept, r_squared, x
+
+
+def build_valuation_chart(chart_df, regression):
+    """Build the interactive bubble chart with its legends and regression toggle."""
+    slope, intercept, r_squared, x = regression
 
     #Create scatter plot using company financial metrics 
     fig=px.scatter(
@@ -191,7 +154,8 @@ def show_panel2():
             )
         )
 
-    #Adjust buuble transparency, borders and ticker positions
+
+# Improve readability of bubbles and their ticker labels.
     fig.update_traces(
         marker=dict(
             opacity=0.75,
@@ -251,7 +215,7 @@ def show_panel2():
             borderwidth=2,
         )
     )
-    # Subtitle
+    # Adding Subtitle
     fig.add_annotation(
         x=0.59, y=1.2,
         xref='paper', yref='paper',
@@ -260,7 +224,7 @@ def show_panel2():
         showarrow=False,
         font=dict(size=15, color='white')
         )
-    # Additional information
+    # Clarify what bubble size and the logarithmic axis represent.
     fig.add_annotation(
         x=0.59, y=1.15,
         xref='paper', yref='paper',
@@ -269,7 +233,8 @@ def show_panel2():
         showarrow=False,
         font=dict(size=13, color='#00D4FF')
         )
-    # Market Cap legend box
+    
+    # Draw a custom reference legend to explain market-cap bubble sizes.
     fig.add_shape(
         type='rect',
         xref='paper', yref='paper',
@@ -289,7 +254,8 @@ def show_panel2():
         font=dict(size=14, color='white')
     )
 
-    # Create a custom legend showing market cap through bubble sizes
+
+  # Show three illustrative bubble sizes in the market-cap legend.
     for cap, size, y in [
         (0.5, 20, 0.61),
         (1.0, 35, 0.51),
@@ -318,7 +284,7 @@ def show_panel2():
             font=dict(size=12, color='white')
         )
 
-    #Regression analysis box
+    # Reserve an information panel for regression fit and its visibility toggle.
     fig.add_shape(
         type='rect',
         xref='paper', yref='paper',
@@ -328,7 +294,7 @@ def show_panel2():
         fillcolor='#061426'
     )
 
-    #Regression box title
+    # Label the regression information panel.
     fig.add_annotation(
         x=1.11, y=0.255,
         xanchor='center',
@@ -339,78 +305,96 @@ def show_panel2():
         font=dict(size=13, color='white')
     )
 
-    #Interpret the regression fit
-    fig.add_annotation(
-        x=1.11, y=0.14,
-        xanchor='center',
-        xref='paper', yref='paper',
-        text='Very Weak Relationship',
-        showarrow=False,
-        font=dict(size=11, color='white')
-    )
-
-    #Interpreation annotion
-    interpretation_index=len(fig.layout.annotations)-1
-
-    #Store the position of the R-squared annotation
-    r2_index=len(fig.layout.annotations)  
-    
-    # Store the index of the R-squared annotation
-    fig.add_annotation(
-        x=1.11, y=0.185,
-        xanchor='center',
-        xref='paper', yref='paper',
-        text=f"<b>R² = {r_squared:.6f}</b>",
-        showarrow=False,
-        font=dict(size=15, color='#FFD166')
-    )
-    #Identify the regression line
-    regression_trace_index=len(fig.data)-1
-
-    #Toggle regression analysis on and off
-    fig.update_layout(
-        updatemenus=[
-            dict(
-                type='buttons',
-                direction='right',
-                showactive=True,
-                active=0,
-                x=1.11,
-                y=0.09,
-                xanchor='center',
-                yanchor='middle',
-                bgcolor='#607D9F',
-                bordercolor='#00D4FF',
-                borderwidth=1,
-                font=dict(size=12, color='#061426'),
-                pad=dict(l=2,r=2,t=2,b=2),
-                buttons=[
-                    dict(
-                        label='On',
-                        method='update',
-                        args=[
-                            {'visible':True},
-                            {f'annotations[{r2_index}].visible':True,
-                             f'annotations[{interpretation_index}].visible':True},
-                            [regression_trace_index]
-                        ]
-                    ),    
-                    dict(
-                        label='Off',
-                        method='update',
-                        args=[
-                            {'visible':False},
-                            {f'annotations[{r2_index}].visible':False,
-                             f'annotations[{interpretation_index}].visible':False},
-                            [regression_trace_index]
-                        ]
-                )
-            ]
+    # When there is no valid regression, show an explanation rather than 
+    # trying to format None as an R² number or toggle a missing line.
+    if r_squared is None:
+        fig.add_annotation(
+            x=1.11, y=0.16, xref='paper', yref='paper',
+            text='Regression unavailable', showarrow=False,
+            font=dict(size=11, color='white')
         )
-    ]
-)
+    else:
+        # Interpret fit strength using R² (descriptive only; not causation).
+        if r_squared < 0.1:
+            fit_label = 'Very weak fit'
+        elif r_squared < 0.3:
+            fit_label = 'Weak fit'
+        elif r_squared < 0.5:
+            fit_label = 'Moderate fit'
+        else:
+            fit_label = 'Stronger fit'
 
-    #Display completed interactive chart    
+        fig.add_annotation(
+            x=1.11, y=0.14, xanchor='center',
+            xref='paper', yref='paper', text=fit_label,
+            showarrow=False, font=dict(size=11, color='white')
+        )
+        interpretation_index = len(fig.layout.annotations) - 1
+
+        fig.add_annotation(
+            x=1.11, y=0.185, xanchor='center',
+            xref='paper', yref='paper',
+            text=f"<b>R² = {r_squared:.6f}</b>",
+            showarrow=False, font=dict(size=15, color='#FFD166')
+        )
+        r2_index = len(fig.layout.annotations) - 1
+
+        # Toggle only the regression trace and its two annotations, not bubbles.
+        regression_trace_index = len(fig.data) - 1
+        fig.update_layout(
+            updatemenus=[dict(
+            type='buttons', 
+            direction='right', 
+            showactive=True, 
+            active=0,
+            x=1.11, y=0.09, 
+            xanchor='center', yanchor='middle',
+            bgcolor='#607D9F', bordercolor='#00D4FF', borderwidth=1,
+            font=dict(size=12, color='#061426'),
+            pad=dict(l=2, r=2, t=2, b=2),
+            buttons=[
+                dict(label='On', method='update', args=[
+                    {'visible': [True]},
+                    {f'annotations[{r2_index}].visible': True,
+                     f'annotations[{interpretation_index}].visible': True},
+                    [regression_trace_index]
+                ]),
+                dict(label='Off', method='update', args=[
+                    {'visible': [False]},
+                    {f'annotations[{r2_index}].visible': False,
+                     f'annotations[{interpretation_index}].visible': False},
+                    [regression_trace_index]
+                ])
+            ]
+        )])
+
+    return fig
+
+
+def show_panel2(selected_tickers=tickers):
+    """Run the valuation panel as a standalone Plotly chart."""
+    df, failed_tickers = load_valuation_data(selected_tickers)
+    chart_df = prepare_chart_data(df)
+
+    if chart_df.empty:
+        print('No valid company data is available for the bubble chart.')
+        if failed_tickers:
+            print('Downloads failed for: ' + ', '.join(failed_tickers))
+        return
+
+    omitted = df.loc[~df['Ticker'].isin(chart_df['Ticker']), 'Ticker'].tolist()
+    if omitted:
+        print('Omitted due to missing/invalid metrics: ' + ', '.join(omitted))
+
+    regression = calculate_regression(chart_df)
+    if regression[2] is None:
+        print('Insufficient valid data or variation to calculate regression.')
+    else:
+        print(f'R-squared: {regression[2]:.6f}')
+
+    fig = build_valuation_chart(chart_df, regression)
     fig.show()
 
-show_panel2()
+
+if __name__ == '__main__':
+    show_panel2()
