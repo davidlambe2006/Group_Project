@@ -33,30 +33,37 @@ sectors=[]
 
 #Retrieve data for each ticker using yfinance
 for ticker in tickers:
-    company=yf.Ticker(ticker)
-    info=company.info
+    try:
+        company=yf.Ticker(ticker)
+        info=company.info
 
-    #Use a fallback for company name if displayName is not available
-    companies.append(
-        info.get('displayName') or info.get('shortName') or ticker
+        companies.append(
+            info.get('displayName') or info.get('shortName') or ticker
         )
-    market_caps.append(info.get('marketCap'))
-    forward_pe.append(info.get('forwardPE'))
-    sectors.append(sector_map[ticker])
-
-    #Retrieved next years estimated EPS growth
-    estimates = company.earnings_estimate
-
-    if estimates is not None and '+1y' in estimates.index:
-        growth=estimates.loc['+1y','growth']
-
-        #Convert growth to a percetage if data is available
-        if pd.notna(growth):
-            eps_growth.append(growth*100)
+        market_caps.append(info.get('marketCap'))
+        forward_pe.append(info.get('forwardPE'))
+        sectors.append(sector_map[ticker])
+        #Retrieved next years estimated EPS growth
+        estimates = company.earnings_estimate
+        
+        if estimates is not None and '+1y' in estimates.index:
+            growth=estimates.loc['+1y','growth']
+            
+            #Convert growth to a percetage if data is available
+            if pd.notna(growth):
+                eps_growth.append(growth*100)
+            else:
+                eps_growth.append(None)
         else:
             eps_growth.append(None)
-    else:
+            
+    except Exception as e:
+        print(f"Error retrieving data for {ticker}: {e}")
+        companies.append(ticker)
+        market_caps.append(None)
+        forward_pe.append(None)
         eps_growth.append(None)
+        sectors.append(sector_map[ticker]) 
 
 # Create a DataFrame to hold the collected data
 df=pd.DataFrame({
@@ -77,20 +84,30 @@ regression_df=df.dropna(
     subset=['Expected EPS Growth (%)','Forward P/E']
 )
 regression_df=regression_df[
-    regression_df['Forward P/E']>0
+    (regression_df['Forward P/E']>0) &
+    np.isfinite(regression_df['Forward P/E']) &
+    np.isfinite(regression_df['Expected EPS Growth (%)'])
 ]
 x=regression_df['Expected EPS Growth (%)']
 y=np.log(regression_df['Forward P/E'])
 
-slope, intercept=np.polyfit(x,y,1)
+if len(x)>=2 and len(x.unique())>=2:
+    slope, intercept=np.polyfit(x,y,1)
+    
+    #Calculate R-squared
+    y_pred=intercept + slope*x
+    
+    ss_res=np.sum((y - y_pred)**2)
+    ss_tot=np.sum((y - np.mean(y))**2)
+    r_squared=1 - (ss_res/ss_tot) if ss_tot != 0 else 0 #Avoid division by zero
+    print(f"R-squared: {r_squared:.6f}")
 
-#Calculate R-squared
-y_pred=intercept + slope*x
+else:
+    slope=None
+    intercept=None
+    r_squared=None
+    print('Insufficient data to calculate regression')
 
-ss_res=np.sum((y - y_pred)**2)
-ss_tot=np.sum((y - np.mean(y))**2)
-r_squared=1 - (ss_res/ss_tot)
-print(f"R-squared: {r_squared:.6f}")
 
 def show_panel2():
     """
@@ -100,9 +117,37 @@ def show_panel2():
     Bubble sizes represent market capitalisation, whilecolors 
     indicate sectors. The P/E axis uses a logarithmic scale.
     """
+
+    chart_df=df.copy()
+    numeric_cols=[
+        'Market Cap ($T)',
+        'Forward P/E',
+        'Expected EPS Growth (%)'
+    ]
+    chart_df[numeric_cols]=chart_df[numeric_cols].apply(
+        pd.to_numeric, errors='coerce'
+    )
+    chart_df[numeric_cols]=chart_df[numeric_cols].replace(
+        [np.inf, -np.inf], np.nan
+    )
+
+    chart_df=chart_df.dropna(
+        subset=numeric_cols
+    )
+
+    chart_df=chart_df[
+        (chart_df['Forward P/E']>0) &
+        (chart_df['Market Cap ($T)']>0)
+    ]
+    #Check whether any companies have valid data after filtering
+    if chart_df.empty:
+        print("No valid valuation data available to display.")
+        return
+
+
     #Create scatter plot using company financial metrics 
     fig=px.scatter(
-        df,
+        chart_df,
         x='Expected EPS Growth (%)',
         y='Forward P/E',
         size='Market Cap ($T)',
@@ -127,23 +172,24 @@ def show_panel2():
     )
 
     #Calculate values for regression line
-    x_line=np.linspace(x.min(), x.max(), 100)
-    y_line=np.exp(slope*x_line + intercept)
-
-    #Add regression line to the scatter plot
-    fig.add_scatter(
-        x=x_line,
-        y=y_line,
-        mode='lines',
-        name='Regression Line',
-        showlegend=False,
-        hoverinfo='skip',
-        line=dict(
-            color='#FFD166',
-            width=3,
-            dash='dash'
+    if slope is not None:
+        x_line=np.linspace(x.min(), x.max(), 100)
+        y_line=np.exp(slope*x_line + intercept)
+        
+        #Add regression line to the scatter plot
+        fig.add_scatter(
+            x=x_line,
+            y=y_line,
+            mode='lines',
+            name='Regression Line',
+            showlegend=False,
+            hoverinfo='skip',
+            line=dict(
+                color='#FFD166',
+                width=3,
+                dash='dash'
+            )
         )
-    )
 
     #Adjust buuble transparency, borders and ticker positions
     fig.update_traces(
