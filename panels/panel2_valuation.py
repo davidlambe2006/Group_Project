@@ -52,6 +52,7 @@ def load_valuation_data(selected_tickers):
                 growth = estimates.loc['+1y', 'growth']
                 if pd.notna(growth):
                     growth_pct = growth * 100
+
         except Exception as error:
             failed_tickers.append(ticker)
             print(f"Error retrieving data for {ticker}: {error}")
@@ -60,7 +61,7 @@ def load_valuation_data(selected_tickers):
         rows.append({
             'Company': name,
             'Ticker': ticker,
-            'Market Cap ($T)': cap / 1e12 if cap is not None else None,
+            'Market Cap ($T)': cap / 1e12 if cap is not None else None, # Convert dollars to trillions
             'Forward P/E': pe,
             'Expected EPS Growth (%)': growth_pct,
             'Sector': sector_map.get(ticker, 'Other'),
@@ -73,6 +74,7 @@ def load_valuation_data(selected_tickers):
 
 def prepare_chart_data(df):
     """Remove missing/invalid bubble inputs; negative EPS growth is allowed."""
+
     cleaned = df.copy()
     cleaned[NUMERIC_COLS] = cleaned[NUMERIC_COLS].apply(
         pd.to_numeric, errors='coerce'
@@ -254,13 +256,17 @@ def build_valuation_chart(chart_df, regression):
         font=dict(size=14, color='white')
     )
 
+    # Calculate legend bubble sizes using Plotly's scaling method
+    max_cap=chart_df['Market Cap ($T)'].max()
+    size_max=75  
 
-  # Show three illustrative bubble sizes in the market-cap legend.
-    for cap, size, y in [
-        (0.5, 20, 0.61),
-        (1.0, 35, 0.51),
-        (2.0, 50, 0.385)
+    for cap, y in[
+        (0.5,0.60),
+        (1.0,0.505),
+        (2.0,0.385)
     ]:
+        size = size_max * np.sqrt(cap / max_cap) 
+
         fig.add_shape(
             type='circle',
             xref='paper', yref='paper',
