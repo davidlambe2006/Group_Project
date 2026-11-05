@@ -16,9 +16,6 @@ if __name__ == "__main__" and any(importlib.util.find_spec(name) is None for nam
         raise SystemExit(subprocess.call([str(local_python), str(Path(__file__).resolve())]))
     raise SystemExit('Install dependencies: python -m pip install -r "Conan/Panel 4 data/requirements.txt"')
 
-DATA_FOLDER = Path(__file__).parent / "Panel 4 data"
-sys.path.insert(0, str(DATA_FOLDER))
-
 import tkinter as tk
 from tkinter import messagebox, ttk
 
@@ -27,7 +24,7 @@ from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm
 from matplotlib.figure import Figure
 from matplotlib.patches import Rectangle
 
-from Group_Project.panels.panel4_data_loader import COMPANIES, load_company_data
+from panel4_data_loader import COMPANIES, load_company_data
 from valuation import calculate_valuation, percent_to_decimal
 
 NAVY = "#081423"
