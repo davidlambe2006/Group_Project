@@ -1,5 +1,6 @@
 {
     "workbench.editor.enablePreview": false,
     "workbench.editor.enablePreviewFromCodeNavigation": false,
-    "workbench.editor.enablePreviewFromQuickOpen": false
+    "workbench.editor.enablePreviewFromQuickOpen": false,
+    "python-envs.defaultEnvManager": "ms-python.python:system"
 }
