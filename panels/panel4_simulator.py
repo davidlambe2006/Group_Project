@@ -27,7 +27,7 @@ from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm
 from matplotlib.figure import Figure
 from matplotlib.patches import Rectangle
 
-from data_loader import COMPANIES, load_company_data
+from Group_Project.panels.panel4_data_loader import COMPANIES, load_company_data
 from valuation import calculate_valuation, percent_to_decimal
 
 NAVY = "#081423"
