@@ -17,7 +17,20 @@ nasdaq_close = nasdaq["Close"]["^IXIC"]
 
 # Convert prices into an index starting at 100
 nasdaq_indexed = nasdaq_close / nasdaq_close.iloc[0] * 100
+# Calculate historical NASDAQ maximum drawdown
+nasdaq_running_peak = nasdaq_indexed.cummax()
 
+nasdaq_drawdown = (nasdaq_indexed / nasdaq_running_peak - 1) * 100
+
+nasdaq_max_drawdown = nasdaq_drawdown.min()
+# Calculate NASDAQ cumulative return
+nasdaq_cumulative_return = (
+    nasdaq_indexed.iloc[-1] / nasdaq_indexed.iloc[0] - 1
+) * 100
+
+print(f"NASDAQ Cumulative Return: {nasdaq_cumulative_return:.2f}%")
+
+print(f"NASDAQ Maximum Drawdown: {nasdaq_max_drawdown:.2f}%")
 # Check the first five indexed values
 print(nasdaq_indexed.head())
 # Find the highest NASDAQ value during the bubble
@@ -129,6 +142,25 @@ print(ai_indexed.head())
 
 # Calculate an equally weighted AI portfolio
 ai_portfolio = ai_indexed.mean(axis=1)
+# Remove dates where the AI portfolio has missing values
+ai_portfolio = ai_portfolio.dropna()
+# Calculate cumulative return
+ai_cumulative_return = (ai_portfolio.iloc[-1] / ai_portfolio.iloc[0] - 1) * 100
+
+print(f"AI Portfolio Cumulative Return: {ai_cumulative_return:.2f}%")
+
+# Calculate maximum drawdown of AI portfolio
+
+# Highest portfolio value reached up to each date
+ai_running_peak = ai_portfolio.cummax()
+
+# Percentage fall from the previous peak
+ai_drawdown = (ai_portfolio / ai_running_peak - 1) * 100
+
+# Largest percentage fall
+ai_max_drawdown = ai_drawdown.min()
+
+print(f"AI Portfolio Maximum Drawdown: {ai_max_drawdown:.2f}%")
 
 # Display the first five portfolio values
 print("\nAI Portfolio:")
@@ -180,15 +212,69 @@ comparison_fig.add_trace(go.Scatter(
     line=dict(color="#00FF99", width=3)
 ))
 
-
+print("DEBUG AI cumulative return:", ai_cumulative_return)
+print("DEBUG AI portfolio first value:", ai_portfolio.iloc[0])
+print("DEBUG AI portfolio last value:", ai_portfolio.iloc[-1])
 # Style the comparison chart
 comparison_fig.update_layout(
-    title="AI Boom vs Dot-Com Bubble",
+    
+    title=(
+        "AI Boom vs Dot-Com Bubble"
+        "<br><sup>"
+        f"Dot-Com Return: {nasdaq_cumulative_return:+.2f}%"
+        f" | Max Drawdown: {nasdaq_max_drawdown:.2f}%"
+        "<br>"
+        f"AI Portfolio Return: {ai_cumulative_return:+.2f}%"
+        f" | Max Drawdown: {ai_max_drawdown:.2f}%"
+        "</sup>"
+    ),
+
     xaxis_title="Months Since Start",
     yaxis_title="Indexed Performance (Start = 100)",
     template="plotly_dark",
-    hovermode="x unified"
+    hovermode="x unified",
+
+    hoverlabel=dict(
+        bgcolor="#1E293B",
+        font_size=13,
+        font_family="Arial"
+    )
 )
+
+# Improve the hover information
+comparison_fig.update_traces(
+    hovertemplate="Indexed Value: %{y:.2f}<extra>%{fullData.name}</extra>"
+)
+
 
 # Open the comparison graph
 comparison_fig.show()
+
+
+# Function to calculate a portfolio from selected companies
+def calculate_ai_portfolio(selected_companies):
+
+    prices = yf.download(
+        selected_companies,
+        start="2023-01-01",
+        auto_adjust=True,
+        progress=False
+    )["Close"]
+
+    # Ensure prices are stored as a DataFrame
+    if isinstance(prices, pd.Series):
+        prices = prices.to_frame()
+
+    # Remove dates where any selected company has no price
+    prices = prices.dropna()
+
+    if prices.empty:
+        raise ValueError("No overlapping stock prices available.")
+
+    # Index each company to 100
+    indexed_prices = prices.div(prices.iloc[0]) * 100
+
+    # Calculate the equally weighted portfolio
+    portfolio = indexed_prices.mean(axis=1)
+
+    return portfolio
