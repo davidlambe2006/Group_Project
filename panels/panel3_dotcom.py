@@ -101,4 +101,94 @@ fig.update_layout(
 )
 
 # Open the interactive graph
-fig.show()
+#fig.show()
+
+
+# Modern AI portfolio — initial data test
+
+selected_companies = ["NVDA", "MSFT", "GOOGL"]
+
+ai_prices = yf.download(
+    selected_companies,
+    start="2023-01-01",
+    auto_adjust=True,
+    progress=False
+)["Close"]
+
+print("\nModern AI stock prices:")
+print(ai_prices.head())
+
+
+# Index each AI company's stock price to 100
+ai_indexed = ai_prices.div(ai_prices.iloc[0]) * 100
+
+# Display the first five rows
+print("\nIndexed AI stock prices:")
+print(ai_indexed.head())
+
+
+# Calculate an equally weighted AI portfolio
+ai_portfolio = ai_indexed.mean(axis=1)
+
+# Display the first five portfolio values
+print("\nAI Portfolio:")
+print(ai_portfolio.head())
+
+
+# Convert daily data into monthly data
+nasdaq_monthly = nasdaq_indexed.resample("MS").first()
+ai_monthly = ai_portfolio.resample("MS").first()
+
+# Check the results
+print("\nMonthly NASDAQ:")
+print(nasdaq_monthly.head())
+
+print("\nMonthly AI Portfolio:")
+print(ai_monthly.head())
+
+
+# Create month numbers for each period
+nasdaq_month_numbers = list(range(len(nasdaq_monthly)))
+ai_month_numbers = list(range(len(ai_monthly)))
+
+# Check the results
+print("\nNASDAQ month numbers:")
+print(nasdaq_month_numbers[:5])
+
+print("\nAI month numbers:")
+print(ai_month_numbers[:5])
+
+
+# Create the comparison chart
+comparison_fig = go.Figure()
+
+# Historical dot-com bubble
+comparison_fig.add_trace(go.Scatter(
+    x=nasdaq_month_numbers,
+    y=nasdaq_monthly,
+    mode="lines",
+    name="Dot-Com Bubble (1995)",
+    line=dict(color="#00BFFF", width=3)
+))
+
+# Modern AI portfolio
+comparison_fig.add_trace(go.Scatter(
+    x=ai_month_numbers,
+    y=ai_monthly,
+    mode="lines",
+    name="Modern AI Boom (2023)",
+    line=dict(color="#00FF99", width=3)
+))
+
+
+# Style the comparison chart
+comparison_fig.update_layout(
+    title="AI Boom vs Dot-Com Bubble",
+    xaxis_title="Months Since Start",
+    yaxis_title="Indexed Performance (Start = 100)",
+    template="plotly_dark",
+    hovermode="x unified"
+)
+
+# Open the comparison graph
+comparison_fig.show()
