@@ -232,7 +232,7 @@ def build_valuation_chart(chart_df, regression):
         legend=dict(
             title='<b>Sector</b>',
             x=1.02,
-            y=1.00,
+            y=1.08,
             bgcolor='#061426',
             bordercolor='#1E3A5F',
             borderwidth=2,
@@ -262,14 +262,14 @@ def build_valuation_chart(chart_df, regression):
         type='rect',
         xref='paper', yref='paper',
         x0=1.02, x1=1.20,
-        y0=0.31, y1=0.70,
+        y0=0.32, y1=0.75,
         line=dict(color='#1E3A5F', width=2),
         fillcolor='#061426'
     )
 
     # Market Cap legend title
     fig.add_annotation(
-        x=1.105, y=0.685,
+        x=1.105, y=0.725,
         xanchor='center',
         xref='paper', yref='paper',
         text='<b>Market Cap ($T)</b>',
@@ -282,9 +282,9 @@ def build_valuation_chart(chart_df, regression):
     size_max=75
 
     for cap, y in[
-        (0.5,0.60),
-        (1.0,0.505),
-        (2.0,0.385)
+        (0.5,0.63),
+        (1.0,0.525),
+        (2.0,0.395)
     ]:
         size = size_max * np.sqrt(cap / max_cap) 
 
@@ -315,14 +315,14 @@ def build_valuation_chart(chart_df, regression):
         type='rect',
         xref='paper', yref='paper',
         x0=1.02, x1=1.20,
-        y0=0.01, y1=0.29,
+        y0=0.01, y1=0.32,
         line=dict(color='#1E3A5F', width=2),
         fillcolor='#061426'
     )
 
     # Label the regression information panel.
     fig.add_annotation(
-        x=1.11, y=0.255,
+        x=1.11, y=0.285,
         xanchor='center',
         yanchor='middle',
         xref='paper', yref='paper',
@@ -337,7 +337,7 @@ def build_valuation_chart(chart_df, regression):
         fig.add_annotation(
             x=1.11, y=0.16, xref='paper', yref='paper',
             text='Regression unavailable', showarrow=False,
-            font=dict(size=8, color='white')
+            font=dict(size=10, color='white')
         )
     else:
         fit_label = f"{r_squared * 100:.1f}% of revenue variation<br>explained by CapEx"
@@ -346,12 +346,12 @@ def build_valuation_chart(chart_df, regression):
         fig.add_annotation(
             x=1.11, y=0.14, xanchor='center',
             xref='paper', yref='paper', text=fit_label,
-            showarrow=False, font=dict(size=8, color='white')
+            showarrow=False, font=dict(size=10, color='white')
         )
         interpretation_index = len(fig.layout.annotations) - 1
 
         fig.add_annotation(
-            x=1.11, y=0.185, xanchor='center',
+            x=1.11, y=0.205, xanchor='center',
             xref='paper', yref='paper',
             text=f"<b>R² = {r_squared:.6f}</b>",
             showarrow=False, font=dict(size=15, color='#FFD166')
@@ -366,10 +366,10 @@ def build_valuation_chart(chart_df, regression):
             direction='right', 
             showactive=True, 
             active=0,
-            x=1.11, y=0.09, 
+            x=1.11, y=0.075, 
             xanchor='center', yanchor='middle',
             bgcolor='#607D9F', bordercolor='#00D4FF', borderwidth=1,
-            font=dict(size=12, color='#061426'),
+            font=dict(size=12, color='black'),
             pad=dict(l=2, r=2, t=2, b=2),
             buttons=[
                 dict(label='On', method='update', args=[
@@ -427,9 +427,6 @@ def show_panel2(selected_tickers=tickers):
         'Capital Expenditure ($B)': 'CapEx ($B)',
         'Annual Revenue ($B)': 'Revenue ($B)'
     })
-
-    for col in ['CapEx ($B)', 'Revenue ($B)', 'Market Cap ($T)']:
-        table_df[col] = table_df[col].map(lambda x: f'{x:,.2f}')
 
     # Create the Dash app
     app = Dash(__name__)
@@ -519,9 +516,23 @@ def show_panel2(selected_tickers=tickers):
                     dash_table.DataTable(
                         data=table_df.to_dict('records'),
                         columns=[
-                            {'name': col, 'id': col}
+                            {
+                                'name': col,
+                                'id': col,
+                                'type': 'numeric' if col in [
+                                    'CapEx ($B)',
+                                    'Revenue ($B)',
+                                    'Market Cap ($T)'
+                                ] else 'text',
+                                'format': {'specifier': ',.2f'} if col in [
+                                    'CapEx ($B)',
+                                    'Revenue ($B)',
+                                    'Market Cap ($T)'
+                                ] else {}
+                            }
                             for col in table_df.columns
                         ],
+                    
                         sort_action='native',
                         page_action='none',
 
@@ -566,10 +577,21 @@ def show_panel2(selected_tickers=tickers):
         port=8050
     )
 
-if __name__ == '__main__':
-    threading.Timer(
-        2,
-        lambda: webbrowser.open('http://127.0.0.1:8050/')
-    ).start()
+def open_dashboard():
+    import time
+    import urllib.request
 
+    url = 'http://127.0.0.1:8050/'
+
+    while True:
+        try:
+            urllib.request.urlopen(url, timeout=1)
+            webbrowser.open(url)
+            break
+        except Exception:
+            time.sleep(0.2)
+
+
+if __name__ == '__main__':
+    threading.Thread(target=open_dashboard, daemon=True).start()
     show_panel2()
