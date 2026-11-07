@@ -1,7 +1,11 @@
 import yfinance as yf
 import plotly.express as px
+import plotly.graph_objects as go
 import pandas as pd
 import numpy as np
+from dash import Dash, dcc, html, dash_table, Input, Output
+import webbrowser
+import threading
 
 # Companies and sectors used for bubble colours.
 tickers = [
@@ -179,7 +183,7 @@ def build_valuation_chart(chart_df, regression):
 # Improve readability of bubbles and their ticker labels.
     fig.update_traces(
         marker=dict(
-            opacity=0.75,
+            opacity=1.0,
             line=dict(width=2, color='rgba(225,255,255,0.95)')
         ),
         textposition="middle center",
@@ -248,7 +252,7 @@ def build_valuation_chart(chart_df, regression):
         x=0.59, y=1.15,
         xref='paper', yref='paper',
         xanchor='center',
-        text='Bubble Size = Market Capitalisation ($T) | Linear Axes',
+        text='Bubble Size = Market Capitalisation ($T)',
         showarrow=False,
         font=dict(size=13, color='#00D4FF')
         )
@@ -336,7 +340,7 @@ def build_valuation_chart(chart_df, regression):
             font=dict(size=8, color='white')
         )
     else:
-        fit_label = f"{r_squared * 100:.1f}% of revenue<br>variation explained"
+        fit_label = f"{r_squared * 100:.1f}% of revenue variation<br>explained by CapEx"
         
 
         fig.add_annotation(
@@ -382,9 +386,9 @@ def build_valuation_chart(chart_df, regression):
                 ])
             ]
         )])
-
     return fig
 
+    
 def show_panel2(selected_tickers=tickers):
     """Run the valuation panel as a standalone Plotly chart."""
     df, failed_tickers = load_valuation_data(selected_tickers)
@@ -405,14 +409,167 @@ def show_panel2(selected_tickers=tickers):
         print('Insufficient valid data or variation to calculate regression.')
     else:
         print(f'R-squared: {regression[2]:.6f}')
-
+    
+    # Both views use the same selected companies.
     fig = build_valuation_chart(chart_df, regression)
-    fig.show()
 
+    table_df = chart_df[[
+        'Ticker',
+        'Company',
+        'Sector',
+        'Capital Expenditure ($B)',
+        'Annual Revenue ($B)',
+        'Market Cap ($T)'
+    ]].sort_values('Ticker').copy()
+
+    # Format the financial figures
+    table_df = table_df.rename(columns={
+        'Capital Expenditure ($B)': 'CapEx ($B)',
+        'Annual Revenue ($B)': 'Revenue ($B)'
+    })
+
+    for col in ['CapEx ($B)', 'Revenue ($B)', 'Market Cap ($T)']:
+        table_df[col] = table_df[col].map(lambda x: f'{x:,.2f}')
+
+    # Create the Dash app
+    app = Dash(__name__)
+
+    tab_style = {
+        'backgroundColor': '#102D47',
+        'color': 'white',
+        'border': '1px solid #1E3A5F',
+        'padding': '12px'
+    }
+
+    selected_tab_style = {
+        **tab_style,
+        'backgroundColor': '#FFFFFF',
+        'color': '#031A2F',
+        'fontWeight': 'bold',
+        'borderTop': '2px solid #00D4FF'
+    }
+
+    app.layout = html.Div(
+        [
+            # Graph / Table toggle
+            dcc.Tabs(
+                id='view-toggle',
+                value='graph',
+                children=[
+                    dcc.Tab(
+                        label='Graph',
+                        value='graph',
+                        style=tab_style,
+                        selected_style=selected_tab_style
+                    ),
+                    dcc.Tab(
+                        label='Table',
+                        value='table',
+                        style=tab_style,
+                        selected_style=selected_tab_style
+                    )
+                ],
+                style={
+                    'width': '220px',
+                    'margin': '0 auto'
+                }
+            ),
+
+            # This area changes when the toggle is clicked
+            html.Div(id='view-content')
+        ],
+        style={
+            'backgroundColor': '#031A2F',
+            'minHeight': '100vh',
+            'margin': '0',
+            'padding': '8px 0',
+            'color': 'white',
+            'fontFamily': 'Arial'
+        }
+    )
+
+    # Switch between the original graph and the table
+    @app.callback(
+        Output('view-content', 'children'),
+        Input('view-toggle', 'value')
+    )
+    def switch_view(view):
+
+        if view == 'graph':
+            return dcc.Graph(
+                figure=fig,
+                style={
+                    'width': '100%',
+                    'height': 'calc(100vh - 65px)'
+                },
+                config={'responsive': True}
+            )
+
+        else:
+            return html.Div(
+                [
+                    html.H2(
+                        'The AI Bubble: Company Comparison',
+                        style={
+                            'textAlign': 'center',
+                            'padding': '25px'
+                        }
+                    ),
+
+                    dash_table.DataTable(
+                        data=table_df.to_dict('records'),
+                        columns=[
+                            {'name': col, 'id': col}
+                            for col in table_df.columns
+                        ],
+                        sort_action='native',
+                        page_action='none',
+
+                        style_table={
+                            'width': '95%',
+                            'margin': 'auto',
+                            'overflowX': 'auto'
+                        },
+
+                        style_header={
+                            'backgroundColor': '#163954',
+                            'color': 'white',
+                            'fontWeight': 'bold',
+                            'border': '1px solid #2D5474',
+                            'padding': '15px'
+                        },
+
+                        style_cell={
+                            'backgroundColor': '#0B2943',
+                            'color': 'white',
+                            'border': '1px solid #23445E',
+                            'padding': '14px',
+                            'textAlign': 'left',
+                            'fontFamily': 'Arial',
+                            'fontSize': '14px'
+                        },
+
+                        style_data_conditional=[
+                            {
+                                'if': {'row_index': 'odd'},
+                                'backgroundColor': '#102F49'
+                            }
+                        ]
+                    )
+                ]
+            )
+
+    # Start the dashboard
+    app.run(
+        debug=False,
+        host='127.0.0.1',
+        port=8050
+    )
 
 if __name__ == '__main__':
+    threading.Timer(
+        2,
+        lambda: webbrowser.open('http://127.0.0.1:8050/')
+    ).start()
+
     show_panel2()
-
- 
-
-
