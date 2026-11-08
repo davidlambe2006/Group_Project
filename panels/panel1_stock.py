@@ -60,3 +60,29 @@ STOCK_COLOURS = [
     "#A8B9CF"   # Grey
 ]
 
+# Downloading Stock Data with yfinance
+
+def get_prices(tickers, start, end):
+    """
+    Fetches historical stock prices for the given tickers and date range.
+
+    Parameters:
+    tickers (list): List of stock ticker symbols.
+    start (str): Start date in 'YYYY-MM-DD' format.
+    end (str): End date in 'YYYY-MM-DD' format.
+
+    Returns:
+    pd.DataFrame: DataFrame containing historical closing stock prices for selected companies.
+    """
+    stock_data = yf.download(
+        tickers=tickers,
+        start=start,
+        end=end,
+        auto_adjust=True,
+        progess=False
+    )
+
+    return stock_data
+
+
+
