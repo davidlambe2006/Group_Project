@@ -12,7 +12,7 @@ import streamlit as st
 import plotly.graph_objects as go
 
 #Python tools for handling dates
-from datetime import datetime, timedelta
+from datetime import date, timedelta
 
 #Company Information
 
@@ -31,6 +31,15 @@ COMPANIES = {
     "CRM": "Salesforce",
     "ASML": "ASML"
 }
+DEFAULT_COMPANIES = [
+    "NVDA",
+    "MSFT",
+    "GOOGL",
+    "AMZN",
+    "META",
+    "AMD"
+]
+
 # Stock market ETFs used as comparison benchmarks
 BENCHMARKS = {
     "SPY": "S&P 500 ETF",
@@ -355,6 +364,182 @@ def build_chart_3d(indexed_prices):
     )
 
     return fig
+
+
+# STREAMLIT DASHBOARD AND INTERACTIVE CONTROLS
+
+def render_panel1(selected_companies):
+    """
+    Display the interactive AI Stock Performance dashboard.
+
+    Parameters
+    ----------
+    selected_companies : list
+        Stock ticker symbols selected by the user.
+        The list will eventually come from the group's
+        global company selector in app.py.
+
+    Returns
+    -------
+        Displays an interactive 3D chart and a table
+        containing historical financial statistics.
+
+    Notes
+    -----
+    The selected companies are compared using adjusted
+    closing prices indexed to a common starting value of 100.
+    """
+
+    # Display the panel heading and research question.
+    st.subheader("Panel 1 — AI Stock Performance (3D)")
+
+    st.write(
+        "How have AI-related companies performed "
+        "relative to the wider stock market?"
+    )
+
+    # Check whether the user has selected any companies.
+    if not selected_companies:
+        st.warning("Please select at least one AI company.")
+        return
+
+    # Create three columns for the dashboard controls.
+    col1, col2, col3 = st.columns(3)
+
+    # Control 1: Historical comparison period.
+    with col1:
+        period = st.selectbox(
+            "Historical Period",
+            ["1 Year", "3 Years", "5 Years", "10 Years"],
+            index=1,
+            key="panel1_period"
+        )
+
+    # Control 2: Choose market benchmarks.
+    with col2:
+        selected_benchmarks = st.multiselect(
+            "Market Benchmarks",
+            options=list(BENCHMARKS.keys()),
+            default=["SPY", "QQQ"],
+            key="panel1_benchmarks"
+        )
+
+    # Control 3: Adjust the amount of chart detail.
+    with col3:
+        detail = st.selectbox(
+            "Chart Detail",
+            ["Daily", "Every 5 Days", "Every 20 Days"],
+            index=1,
+            key="panel1_detail"
+        )
+
+    # Combine the selected AI companies and benchmarks.
+    tickers = list(dict.fromkeys(
+        selected_companies + selected_benchmarks
+    ))
+
+    # Convert the chosen period into a number of years.
+    years = int(period.split()[0])
+
+    # Calculate the starting and ending dates.
+    end_date = date.today() + timedelta(days=1)
+
+    start_date = date.today() - timedelta(
+        days=round(years * 365.25)
+    )
+
+    # Download the historical stock prices.
+    try:
+        with st.spinner("Downloading historical stock data..."):
+            prices = get_prices(
+                tickers,
+                start_date.isoformat(),
+                end_date.isoformat()
+            )
+
+    except Exception as error:
+        st.error("Unable to download historical stock data.")
+        st.caption(str(error))
+        return
+
+    # Check whether the download returned any information.
+    if prices.empty:
+        st.error("No stock data was returned.")
+        return
+
+    # Check for companies with completely missing prices.
+    missing = [
+        ticker for ticker in tickers
+        if ticker not in prices.columns
+        or prices[ticker].isna().all()
+    ]
+
+    if missing:
+        st.warning(
+            "Data unavailable for: " + ", ".join(missing)
+        )
+
+    # Remove tickers that have no historical prices.
+    prices = prices.drop(columns=missing, errors="ignore")
+
+    # Ensure at least one AI company still has valid data.
+    if not any(ticker in prices.columns
+               for ticker in selected_companies):
+        st.warning("No selected AI companies have available data.")
+        return
+
+    # Index stock prices to a common starting value of 100.
+    indexed_prices = index_and_normalise(prices)
+
+    if len(indexed_prices) < 3:
+        st.warning("Not enough shared historical data to compare.")
+        return
+
+    # Calculate statistics using the full historical dataset.
+    statistics = calculate_statistics(indexed_prices)
+
+    # Reduce chart points to improve 3D performance.
+    if detail == "Daily":
+        step = 1
+    elif detail == "Every 5 Days":
+        step = 5
+    else:
+        step = 20
+
+    chart_prices = indexed_prices.iloc[::step].copy()
+
+    # Include the latest observation if sampling skipped it.
+    if chart_prices.index[-1] != indexed_prices.index[-1]:
+        chart_prices = pd.concat([
+            chart_prices,
+            indexed_prices.iloc[[-1]]
+        ])
+
+    # Create and display the interactive 3D chart.
+    figure = build_chart_3d(chart_prices)
+
+    st.plotly_chart(
+        figure,
+        use_container_width=True,
+        key="panel1_3d_chart"
+    )
+
+    # Display the historical statistics underneath.
+    st.markdown("### Financial Performance Statistics")
+
+    st.dataframe(
+        statistics.round(2),
+        use_container_width=True
+    )
+
+    # Explain the source and methodology.
+    st.caption(
+        f"Source: Yahoo Finance via yfinance | "
+        f"Actual comparison period: "
+        f"{indexed_prices.index[0]:%d %b %Y} to "
+        f"{indexed_prices.index[-1]:%d %b %Y} | "
+        "Prices adjusted for stock splits and dividends."
+    )
 
 
 
