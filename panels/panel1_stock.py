@@ -40,7 +40,7 @@ BENCHMARKS = {
 #Defining dashboard colours
 
 #Background colour for the dashboard
-DARK_BLUE = "0A1830"
+DARK_BLUE = "#0A1830"
 
 # Colours used for different company lines
 STOCK_COLOURS = [
