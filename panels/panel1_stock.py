@@ -112,6 +112,40 @@ def get_prices(tickers, start, end):
 
     return closing_prices
 
+#Indexing and Normalising Stock Prices
+
+def index_and_normalise(prices):
+    """
+    Index historical stock prices to a common starting value of 100.
+
+    Parameters
+    ----------
+    prices : pd.DataFrame
+        Historical adjusted closing prices for selected companies.
+
+    Returns
+    -------
+    pd.DataFrame
+        Indexed stock prices, with each company starting at 100.
+
+    """
+
+    # Keep positive prices and dates shared by all companies.
+    common_prices = prices.where(prices > 0).dropna(how="any")
+
+    # Check that enough observations exist for comparison.
+    if len(common_prices) < 2:
+        return pd.DataFrame()
+
+    # Find the first available share price for each company.
+    starting_prices = common_prices.iloc[0]
+
+    # Divide by starting prices and multiply by 100.
+    indexed_prices = common_prices.div(starting_prices).mul(100)
+
+    return indexed_prices
+
+
 
 
 
