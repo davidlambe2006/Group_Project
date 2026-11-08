@@ -82,7 +82,40 @@ def get_prices(tickers, start, end):
         progess=False
     )
 
-    return stock_data
+    if stock_data.empty:
+        return pd.DataFrame()  # Return an empty DataFrame if no data is fetched
+
+     # Select the closing prices from the dataset.
+    if isinstance(stock_data.columns, pd.MultiIndex):
+        closing_prices = stock_data["Close"]
+
+    else:
+        closing_prices = stock_data[["Close"]]
+        closing_prices.columns = [tickers[0]]
+     # Ensure we have a DataFrame, even for one company.
+    if isinstance(closing_prices, pd.Series):
+        closing_prices = closing_prices.to_frame()
+
+    # Keep the company columns in the requested order.
+    closing_prices = closing_prices.reindex(columns=tickers)
+
+    # Convert prices to numbers and remove invalid values.
+    closing_prices = closing_prices.apply(
+        pd.to_numeric, errors="coerce"
+    )
+
+    # Remove dates where all prices are missing.
+    closing_prices = closing_prices.dropna(how="all")
+
+    # Organise dates from oldest to newest.
+    closing_prices = closing_prices.sort_index()
+
+    return closing_prices
+
+
+
+
+
 
 
 
