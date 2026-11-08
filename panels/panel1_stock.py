@@ -37,4 +37,26 @@ BENCHMARKS = {
     "QQQ": "Nasdaq-100 ETF"
 }
 
+#Defining dashboard colours
+
+#Background colour for the dashboard
+DARK_BLUE = "0A1830"
+
+# Colours used for different company lines
+STOCK_COLOURS = [
+    "#41DDB4",  # Green
+    "#5BA8FF",  # Blue
+    "#FBC56C",  # Yellow
+    "#FC8F73",  # Orange
+    "#C29BFF",  # Purple
+    "#6AE6E6",  # Cyan
+    "#E879BD",  # Pink
+    "#AFD873",  # Light green
+    "#FF748E",  # Red
+    "#CED4FF",  # Light purple
+    "#E5B77A",  # Gold
+    "#83BBE9",  # Light blue
+    "#FFFFFF",  # White
+    "#A8B9CF"   # Grey
+]
 
