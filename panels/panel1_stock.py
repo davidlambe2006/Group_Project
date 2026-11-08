@@ -92,7 +92,7 @@ def get_prices(tickers, start, end):
     else:
         closing_prices = stock_data[["Close"]]
         closing_prices.columns = [tickers[0]]
-     # Ensure we have a DataFrame, even for one company.
+     # Ensure a DataFrame, even for one company.
     if isinstance(closing_prices, pd.Series):
         closing_prices = closing_prices.to_frame()
 
@@ -144,6 +144,68 @@ def index_and_normalise(prices):
     indexed_prices = common_prices.div(starting_prices).mul(100)
 
     return indexed_prices
+
+
+# Financial Performance Statistics
+
+def calculate_statistics(indexed_prices):
+    """
+    Calculate historical returns, volatility and maximum drawdown.
+
+    Parameters
+    ----------
+    indexed_prices : pd.DataFrame
+        Historical stock prices indexed to a starting value of 100.
+
+    Returns
+    -------
+    pd.DataFrame
+        A table containing the following statistics for each stock:
+        - Total Return (%)
+        - Annualised Volatility (%)
+        - Maximum Drawdown (%)
+
+    """
+
+    # Check that enough observations are available.
+    if len(indexed_prices) < 3:
+        return pd.DataFrame()
+
+    # Calculate the daily percentage changes in stock prices.
+    daily_returns = indexed_prices.pct_change().dropna()
+
+    # Calculate total percentage return over the selected period.
+    total_return = (
+        indexed_prices.iloc[-1] / indexed_prices.iloc[0] - 1
+    ) * 100
+
+    # Calculate annualised volatility from daily returns.
+    volatility = (
+        daily_returns.std() * np.sqrt(252) * 100
+    )
+
+    # Find the highest previous indexed price for each stock.
+    previous_peaks = indexed_prices.cummax()
+
+    # Calculate the percentage decline from previous peaks.
+    drawdowns = (
+        indexed_prices / previous_peaks - 1
+    ) * 100
+
+    # Find the largest historical decline for each company.
+    max_drawdown = drawdowns.min()
+
+    # Combine the statistics into one pandas DataFrame.
+    statistics = pd.DataFrame({
+        "Total Return (%)": total_return,
+        "Annualised Volatility (%)": volatility,
+        "Maximum Drawdown (%)": max_drawdown
+    })
+
+    statistics.index.name = "Ticker"
+
+    return statistics
+
 
 
 
