@@ -1,6 +1,34 @@
 import pandas as pd
 import yfinance as yf
 
+# Function to calculate a portfolio from selected companies
+def calculate_ai_portfolio(selected_companies, start_date):
+
+    prices = yf.download(
+        selected_companies,
+        start=start_date,
+        auto_adjust=True,
+        progress=False
+    )["Close"]
+
+    # Ensure prices are stored as a DataFrame
+    if isinstance(prices, pd.Series):
+        prices = prices.to_frame()
+
+    # Remove dates where any selected company has no price
+    prices = prices.dropna()
+
+    if prices.empty:
+        raise ValueError("No overlapping stock prices available.")
+
+    # Index each company to 100
+    indexed_prices = prices.div(prices.iloc[0]) * 100
+
+    # Calculate the equally weighted portfolio
+    portfolio = indexed_prices.mean(axis=1)
+
+    return portfolio
+
 # Download historical NASDAQ Composite prices
 nasdaq = yf.download(
     "^IXIC",
@@ -116,86 +144,84 @@ fig.update_layout(
 # Open the interactive graph
 #fig.show()
 
+def render_panel3(selected_companies):
 
-# Modern AI portfolio — initial data test
+    ai_start_date = "2024-01-01"
 
-selected_companies = ["NVDA", "MSFT", "GOOGL"]
+    ai_prices = yf.download(
+        selected_companies,
+        start=ai_start_date,
+        auto_adjust=True,
+        progress=False
+    )["Close"]
 
-ai_prices = yf.download(
-    selected_companies,
-    start="2023-01-01",
-    auto_adjust=True,
-    progress=False
-)["Close"]
+    print("\nModern AI stock prices:")
+    print(ai_prices.head())
 
-print("\nModern AI stock prices:")
-print(ai_prices.head())
+    # Keep only dates where ALL selected companies have prices
+    ai_prices = ai_prices.dropna()
 
+    # Check that valid prices remain
+    if ai_prices.empty:
+        raise ValueError("No overlapping stock prices available.")
 
-# Index each AI company's stock price to 100
-ai_indexed = ai_prices.div(ai_prices.iloc[0]) * 100
+    ai_portfolio = calculate_ai_portfolio(
+        selected_companies,
+        "2023-01-01"
+    )
 
-# Display the first five rows
-print("\nIndexed AI stock prices:")
-print(ai_indexed.head())
+    # Calculate cumulative return
+    ai_cumulative_return = (ai_portfolio.iloc[-1] / ai_portfolio.iloc[0] - 1) * 100
 
+    print(f"AI Portfolio Cumulative Return: {ai_cumulative_return:.2f}%")
 
-# Calculate an equally weighted AI portfolio
-ai_portfolio = ai_indexed.mean(axis=1)
-# Remove dates where the AI portfolio has missing values
-ai_portfolio = ai_portfolio.dropna()
-# Calculate cumulative return
-ai_cumulative_return = (ai_portfolio.iloc[-1] / ai_portfolio.iloc[0] - 1) * 100
+    # Calculate maximum drawdown of AI portfolio
 
-print(f"AI Portfolio Cumulative Return: {ai_cumulative_return:.2f}%")
+    # Highest portfolio value reached up to each date
+    ai_running_peak = ai_portfolio.cummax()
 
-# Calculate maximum drawdown of AI portfolio
+    # Percentage fall from the previous peak
+    ai_drawdown = (ai_portfolio / ai_running_peak - 1) * 100
 
-# Highest portfolio value reached up to each date
-ai_running_peak = ai_portfolio.cummax()
+    # Largest percentage fall
+    ai_max_drawdown = ai_drawdown.min()
 
-# Percentage fall from the previous peak
-ai_drawdown = (ai_portfolio / ai_running_peak - 1) * 100
+    print(f"AI Portfolio Maximum Drawdown: {ai_max_drawdown:.2f}%")
 
-# Largest percentage fall
-ai_max_drawdown = ai_drawdown.min()
-
-print(f"AI Portfolio Maximum Drawdown: {ai_max_drawdown:.2f}%")
-
-# Display the first five portfolio values
-print("\nAI Portfolio:")
-print(ai_portfolio.head())
+    # Display the first five portfolio values
+    print("\nAI Portfolio:")
+    print(ai_portfolio.head())
 
 
-# Convert daily data into monthly data
-nasdaq_monthly = nasdaq_indexed.resample("MS").first()
-ai_monthly = ai_portfolio.resample("MS").first()
+    # Convert daily data into monthly data
+    nasdaq_monthly = nasdaq_indexed.resample("MS").first()
+    ai_monthly = ai_portfolio.resample("MS").first()
 
-# Check the results
-print("\nMonthly NASDAQ:")
-print(nasdaq_monthly.head())
+    # Check the results
+    print("\nMonthly NASDAQ:")
+    print(nasdaq_monthly.head())
 
-print("\nMonthly AI Portfolio:")
-print(ai_monthly.head())
-
-
-# Create month numbers for each period
-nasdaq_month_numbers = list(range(len(nasdaq_monthly)))
-ai_month_numbers = list(range(len(ai_monthly)))
-
-# Check the results
-print("\nNASDAQ month numbers:")
-print(nasdaq_month_numbers[:5])
-
-print("\nAI month numbers:")
-print(ai_month_numbers[:5])
+    print("\nMonthly AI Portfolio:")
+    print(ai_monthly.head())
 
 
-# Create the comparison chart
-comparison_fig = go.Figure()
+    # Create month numbers for each period
+    nasdaq_month_numbers = list(range(len(nasdaq_monthly)))
+    ai_month_numbers = list(range(len(ai_monthly)))
 
-# Historical dot-com bubble
-comparison_fig.add_trace(go.Scatter(
+    # Check the results
+    print("\nNASDAQ month numbers:")
+    print(nasdaq_month_numbers[:5])
+
+    print("\nAI month numbers:")
+    print(ai_month_numbers[:5])
+
+
+    # Create the comparison chart
+    comparison_fig = go.Figure()
+
+    # Historical dot-com bubble
+    comparison_fig.add_trace(go.Scatter(
     x=nasdaq_month_numbers,
     y=nasdaq_monthly,
     mode="lines",
@@ -203,8 +229,8 @@ comparison_fig.add_trace(go.Scatter(
     line=dict(color="#00BFFF", width=3)
 ))
 
-# Modern AI portfolio
-comparison_fig.add_trace(go.Scatter(
+    # Modern AI portfolio
+    comparison_fig.add_trace(go.Scatter(
     x=ai_month_numbers,
     y=ai_monthly,
     mode="lines",
@@ -212,11 +238,11 @@ comparison_fig.add_trace(go.Scatter(
     line=dict(color="#00FF99", width=3)
 ))
 
-print("DEBUG AI cumulative return:", ai_cumulative_return)
-print("DEBUG AI portfolio first value:", ai_portfolio.iloc[0])
-print("DEBUG AI portfolio last value:", ai_portfolio.iloc[-1])
-# Style the comparison chart
-comparison_fig.update_layout(
+    print("DEBUG AI cumulative return:", ai_cumulative_return)
+    print("DEBUG AI portfolio first value:", ai_portfolio.iloc[0])
+    print("DEBUG AI portfolio last value:", ai_portfolio.iloc[-1])
+    # Style the comparison chart
+    comparison_fig.update_layout(
     
     title=(
         "AI Boom vs Dot-Com Bubble"
@@ -242,39 +268,15 @@ comparison_fig.update_layout(
 )
 
 # Improve the hover information
-comparison_fig.update_traces(
+    comparison_fig.update_traces(
     hovertemplate="Indexed Value: %{y:.2f}<extra>%{fullData.name}</extra>"
 )
 
 
-# Open the comparison graph
-comparison_fig.show()
+    # Open the comparison graph
+    comparison_fig.show()
 
 
-# Function to calculate a portfolio from selected companies
-def calculate_ai_portfolio(selected_companies):
 
-    prices = yf.download(
-        selected_companies,
-        start="2023-01-01",
-        auto_adjust=True,
-        progress=False
-    )["Close"]
-
-    # Ensure prices are stored as a DataFrame
-    if isinstance(prices, pd.Series):
-        prices = prices.to_frame()
-
-    # Remove dates where any selected company has no price
-    prices = prices.dropna()
-
-    if prices.empty:
-        raise ValueError("No overlapping stock prices available.")
-
-    # Index each company to 100
-    indexed_prices = prices.div(prices.iloc[0]) * 100
-
-    # Calculate the equally weighted portfolio
-    portfolio = indexed_prices.mean(axis=1)
-
-    return portfolio
+if __name__ == "__main__":
+    render_panel3(["NVDA", "MSFT", "GOOGL"])
