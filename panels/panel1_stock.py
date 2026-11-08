@@ -90,7 +90,7 @@ def get_prices(tickers, start, end):
         start=start,
         end=end,
         auto_adjust=True,
-        progess=False
+        progress=False
     )
 
     if stock_data.empty:
@@ -365,7 +365,32 @@ def build_chart_3d(indexed_prices):
         )
     )
 
+    # Improve the readability of the chart text.
+    fig.update_layout(
+        font=dict(color="white"),
+        title_font=dict(color="white", size=18),
+
+        legend=dict(
+            font=dict(color="white", size=13),
+            bgcolor="rgba(10, 24, 48, 0.8)",
+            orientation="v",
+            x=0.99,
+            xanchor="right",
+            y=0.98
+        ),
+
+        height=560
+    )
+
+    # Make the 3D axis labels white as well.
+    fig.update_scenes(
+        xaxis_color="white",
+        yaxis_color="white",
+        zaxis_color="white"
+    )
     return fig
+
+
 
 
 # STREAMLIT DASHBOARD AND INTERACTIVE CONTROLS
@@ -517,22 +542,39 @@ def render_panel1(selected_companies):
             indexed_prices.iloc[[-1]]
         ])
 
-    # Create and display the interactive 3D chart.
-    figure = build_chart_3d(chart_prices)
 
-    st.plotly_chart(
-        figure,
-        use_container_width=True,
-        key="panel1_3d_chart"
-    )
+    # Create two columns: 75% for chart, 25% for statistics.
+    chart_col, stats_col = st.columns([3, 1], gap="medium")
 
-    # Display the historical statistics underneath.
-    st.markdown("### Financial Performance Statistics")
+    # LEFT COLUMN: Interactive 3D stock performance graph.
+    with chart_col:
+        figure = build_chart_3d(chart_prices)
 
-    st.dataframe(
-        statistics.round(2),
-        use_container_width=True
-    )
+        st.plotly_chart(
+            figure,
+            use_container_width=True,
+            key="panel1_3d_chart"
+        )
+
+    # RIGHT COLUMN: Financial performance statistics.
+    with stats_col:
+        st.markdown("#### Performance Statistics")
+
+        # Rename the columns to fit the smaller space.
+        display_stats = statistics.rename(columns={
+            "Total Return (%)": "Return",
+            "Annualised Volatility (%)": "Volatility",
+            "Maximum Drawdown (%)": "Drawdown"
+        })
+
+        # Round the statistics to two decimal places.
+        st.dataframe(
+            display_stats.round(2),
+            use_container_width=True,
+            height=560
+        )
+
+  
 
     # Explain the source and methodology.
     st.caption(
@@ -545,14 +587,42 @@ def render_panel1(selected_companies):
 
 
 
+
 def main():
-    # Run the panel with six default companies
+    """
+    Run Panel 1 independently with six default AI companies.
+
+    Configure the dashboard's appearance and width.
+    """
+
+    # Set the dashboard to use the full browser width.
+    st.set_page_config(
+        page_title="AI Boom Dashboard",
+        layout="wide",
+        initial_sidebar_state="collapsed"
+    )
+
+    # Increase the maximum width of the dashboard.
+    st.markdown(
+        """
+        <style>
+        .block-container {
+            max-width: 1700px;
+            padding-left: 1.5rem;
+            padding-right: 1.5rem;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # Display Panel 1 using the six default companies.
     render_panel1(DEFAULT_COMPANIES)
 
 
 if __name__ == "__main__":
     main()
-    
+
 
 
 
