@@ -206,8 +206,131 @@ def calculate_statistics(indexed_prices):
 
     return statistics
 
+# Interactive 3D Stock Performance Chart
 
+def build_chart_3d(indexed_prices):
+    """
+    Create an interactive 3D chart of historical stock performance.
 
+    Parameters
+    ----------
+    indexed_prices : pd.DataFrame
+        Stock prices indexed to a common starting value of 100.
+        Each column represents a different company.
+
+    Returns
+    -------
+    plotly.graph_objects.Figure
+        An interactive 3D line chart displaying stock performance.
+
+    Note
+    ----
+    The X-axis represents historical dates.
+    The Y-axis separates companies.
+    The Z-axis shows indexed stock performance.
+    """
+
+    # Create an empty Plotly figure.
+    fig = go.Figure()
+
+    # Check whether the DataFrame contains any data.
+    if indexed_prices.empty:
+        return fig
+
+    # Convert the DataFrame index into dates.
+    dates = pd.to_datetime(indexed_prices.index)
+
+    # Calculate the number of days since the starting date.
+    days = (dates - dates[0]).days
+
+    # Create a separate 3D line for every selected company.
+    for number, ticker in enumerate(indexed_prices.columns):
+
+        fig.add_trace(
+            go.Scatter3d(
+                x=days,
+                y=[number] * len(indexed_prices),
+                z=indexed_prices[ticker],
+
+                mode="lines",
+                name=ticker,
+
+                line=dict(
+                    color=STOCK_COLOURS[
+                        number % len(STOCK_COLOURS)
+                    ],
+                    width=6
+                ),
+
+                text=dates.strftime("%d %b %Y"),
+
+                hovertemplate=(
+                    f"Company: {ticker}<br>"
+                    "Date: %{text}<br>"
+                    "Indexed Price: %{z:.2f}"
+                    "<extra></extra>"
+                )
+            )
+        )
+
+    # Select five evenly spaced dates for the X-axis labels.
+    tick_positions = np.linspace(
+        0,
+        len(dates) - 1,
+        min(5, len(dates)),
+        dtype=int
+    )
+
+    # Configure the chart's appearance.
+    fig.update_layout(
+        title="AI Stock Performance — 3D Comparison",
+        template="plotly_dark",
+        paper_bgcolor=DARK_BLUE,
+        font=dict(color="white"),
+        height=580,
+
+        scene=dict(
+            xaxis=dict(
+                title="Date",
+                tickvals=days[tick_positions],
+                ticktext=dates[tick_positions].strftime("%b %Y"),
+                gridcolor="#35506D"
+            ),
+
+            yaxis=dict(
+                title="Company",
+                tickvals=list(range(len(indexed_prices.columns))),
+                ticktext=list(indexed_prices.columns),
+                gridcolor="#35506D"
+            ),
+
+            zaxis=dict(
+                title="Indexed Price (Base = 100)",
+                gridcolor="#35506D"
+            ),
+
+            bgcolor=DARK_BLUE,
+
+            aspectratio=dict(
+                x=2.2,
+                y=1.1,
+                z=1.1
+            ),
+
+            camera=dict(
+                eye=dict(x=1.6, y=-1.8, z=1.1)
+            )
+        )
+    )
+
+    return fig
+
+               
+            
+               
+               
+        
+    
 
 
 
