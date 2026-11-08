@@ -556,25 +556,59 @@ def render_panel1(selected_companies):
             key="panel1_3d_chart"
         )
 
-    # RIGHT COLUMN: Financial performance statistics.
+   
+    # RIGHT COLUMN: Colour-coded performance statistics.
     with stats_col:
-        st.markdown("#### Performance Statistics")
 
-        # Rename the columns to fit the smaller space.
-        display_stats = statistics.rename(columns={
-            "Total Return (%)": "Return",
-            "Annualised Volatility (%)": "Volatility",
-            "Maximum Drawdown (%)": "Drawdown"
-        })
+        st.markdown("#### Total Return")
 
-        # Round the statistics to two decimal places.
-        st.dataframe(
-            display_stats.round(2),
-            use_container_width=True,
-            height=560
-        )
+        # Display a performance card for each company.
+        for number, ticker in enumerate(indexed_prices.columns):
 
-  
+            # Match the company colour to its line on the graph.
+            colour = STOCK_COLOURS[
+                number % len(STOCK_COLOURS)
+            ]
+
+            # Retrieve the company's calculated total return.
+            total_return = statistics.loc[
+                ticker, "Total Return (%)"
+            ]
+
+            # Retrieve the full company name.
+            company_name = COMPANIES.get(
+                ticker, BENCHMARKS.get(ticker, ticker)
+            )
+
+            # Create a compact financial performance card.
+            card_html = f"""
+            <div style="
+                background-color: #102A45;
+                border-left: 4px solid {colour};
+                border-radius: 7px;
+                padding: 12px;
+                margin-bottom: 8px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                gap: 10px;
+            ">
+                <span style="color: white; font-size: 13px;">
+                    {company_name} ({ticker})
+                </span>
+                <span style="
+                    color: {colour};
+                    font-weight: bold;
+                    font-size: 15px;
+                    white-space: nowrap;
+                ">
+                    {total_return:+,.1f}%
+                </span>
+            </div>
+            """
+
+            st.html(card_html)
+
 
     # Explain the source and methodology.
     st.caption(
