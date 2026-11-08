@@ -1,6 +1,8 @@
 #Panel 1: AI Stock Performance
 
 #Libraries for handling data and calculations
+from py_compile import main
+
 import pandas as pd
 import numpy as np
 
@@ -540,6 +542,17 @@ def render_panel1(selected_companies):
         f"{indexed_prices.index[-1]:%d %b %Y} | "
         "Prices adjusted for stock splits and dividends."
     )
+
+
+
+def main():
+    # Run the panel with six default companies
+    render_panel1(DEFAULT_COMPANIES)
+
+
+if __name__ == "__main__":
+    main()
+    
 
 
 
