@@ -1,3 +1,6 @@
+from locale import currency
+
+from matplotlib import ticker
 import yfinance as yf
 import plotly.express as px
 import plotly.graph_objects as go
@@ -58,27 +61,49 @@ def load_valuation_data(selected_tickers):
                         rev = income.loc['Total Revenue', year]
                         expenditure = cashflow.loc['Capital Expenditure', year]
                         if pd.notna(rev) and pd.notna(expenditure):
-                            currency = info.get('financialCurrency', 'USD')
+                             # Get currencies for financial statements and market cap
+                            currency = info.get('financialCurrency')
+                            market_currency = info.get('currency')
                             
+                            if not currency:
+                                 raise ValueError(f"Financial currency unavailable for {ticker}")
+                            
+                            if cap is not None and not market_currency:
+                                 raise ValueError(f"Market cap currency unavailable for {ticker}")
+                            
+                            # Convert revenue and CapEx using historical exchange rates
                             fx_rate = 1.0
                             if currency != 'USD':
-                                fx_ticker = f"{currency}USD=X"
-                                fx_data = yf.Ticker(fx_ticker).history(
-                                    start=year - pd.DateOffset(years=1),
-                                    end=year + pd.Timedelta(days=1)
+                                 fx_ticker = f"{currency}USD=X"
+                                 fx_data = yf.Ticker(fx_ticker).history(
+                                      start=year - pd.DateOffset(years=1),
+                                      end=year + pd.Timedelta(days=1)
                                 )
-                                
-                                if fx_data.empty:
-                                    raise ValueError(f"No exchange rate available for {currency}")
-                                
-                                fx_rate = fx_data['Close'].mean()
-                            
+                                 
+                                 if fx_data.empty:
+                                     raise ValueError(f"No exchange rate available for {currency}")
+                                 
+                                 fx_rate = fx_data['Close'].dropna().mean()
+                                 
                             revenue = rev * fx_rate / 1e9
                             capex = abs(expenditure) * fx_rate / 1e9
+                            
+                            # Convert market cap using a recent exchange rate
+                            if cap is not None and market_currency != 'USD':
+                                fx_ticker = f"{market_currency}USD=X"
+                                fx_data = yf.Ticker(fx_ticker).history(period='5d')
+                                
+                                if fx_data.empty or fx_data['Close'].dropna().empty:
+                                    raise ValueError(f"No market cap exchange rate for {market_currency}")
+                                
+                                fx_rate_market = fx_data['Close'].dropna().iloc[-1]
+                                cap = cap * fx_rate_market
+                                
                             break
 
         except Exception as error:
             failed_tickers.append(ticker)
+            cap, capex, revenue = None, None, None
             print(f"Error retrieving data for {ticker}: {error}")
 
         # One dictionary per ticker avoids misaligned separate data lists.
