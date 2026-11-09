@@ -62,14 +62,12 @@ class ValuationPanel:
         self.executor = ThreadPoolExecutor(max_workers=2)
         self.messages = Queue()
         self.request_id = 0
-        self.redraw_job = None
         self.scenarios = {
             "Bear": dict(growth=10, margin=20, pe=30, years=5),
             "Base": dict(growth=20, margin=25, pe=30, years=5),
             "Bull": dict(growth=30, margin=30, pe=30, years=5),
         }
         self.active = "Base"
-        self.loading = False
         self.variables = {key: tk.IntVar(value=value)
                           for key, value in self.scenarios["Base"].items()}
         self.configure_styles()
@@ -89,8 +87,6 @@ class ValuationPanel:
                         foreground=WHITE, rowheight=30, font=("Arial", 10))
         style.configure("Treeview.Heading", background=LINE, foreground=WHITE)
         style.map("Treeview", background=[("selected", "#176466")])
-        style.configure("Sharp.Horizontal.TScale", background=CYAN, troughcolor=LINE,
-                        bordercolor=LINE, lightcolor=CYAN, darkcolor=CYAN, sliderlength=18)
 
     def label(self, parent, text="", size=12, color=WHITE, **kwargs):
         return tk.Label(parent, text=text, bg=NAVY, fg=color,
@@ -128,24 +124,6 @@ class ValuationPanel:
         self.source_summary.pack(fill="x", pady=(10, 12))
         self.reload_button = self.button(sidebar, "↻ Refresh data", lambda: self.change_company(force=True))
         self.reload_button.pack(fill="x", pady=(0, 10))
-        self.slider_labels = {}
-        for key, title, minimum, maximum, step in [
-            ("growth", "Growth", -20, 60, 5), ("margin", "Margin", 0, 50, 5),
-            ("pe", "P/E", 5, 60, 1), ("years", "Years", 1, 10, 1),
-        ]:
-            row = tk.Frame(sidebar, bg=NAVY)
-            row.pack(fill="x", pady=(8, 0))
-            self.label(row, title, 15).pack(side="left")
-            self.slider_labels[key] = self.label(row, size=15)
-            self.slider_labels[key].pack(side="right")
-            # A themed slider keeps the thumb clearly visible against the dark panel.
-            slider = ttk.Scale(sidebar, from_=minimum, to=maximum, orient="horizontal",
-                               style="Sharp.Horizontal.TScale")
-            slider.set(self.variables[key].get())
-            slider.configure(command=lambda value, k=key, s=step: self.move_slider(k, value, s))
-            slider.pack(fill="x", pady=(12, 20))
-            self.sliders = getattr(self, "sliders", {})
-            self.sliders[key] = slider
 
         self.button(sidebar, "Data & assumptions", self.show_data).pack(fill="x", pady=(12, 8))
 
@@ -185,25 +163,14 @@ class ValuationPanel:
     def assumptions(self):
         return {key: variable.get() for key, variable in self.variables.items()}
 
-    def move_slider(self, key, value, step):
-        if self.loading:
-            return
-        self.variables[key].set(int(round(float(value) / step) * step))
-        if self.redraw_job:
-            self.root.after_cancel(self.redraw_job)
-        self.redraw_job = self.root.after(60, self.refresh)
-
     def select_scenario(self, name):
         self.active = name
-        self.loading = True
         for key, value in self.scenarios[name].items():
             self.variables[key].set(value)
-            self.sliders[key].set(value)
-        self.loading = False
         self.refresh()
 
     def change_company(self, _event=None, force=False):
-        """Download off the UI thread, so sliders and the window stay responsive."""
+        """Download off the UI thread, so the window stays responsive."""
         company = self.company.get()
         self.request_id += 1
         request_id = self.request_id
@@ -322,20 +289,12 @@ class ValuationPanel:
 
     def close(self):
         self.root.after_cancel(self.poll_job)
-        if self.redraw_job:
-            self.root.after_cancel(self.redraw_job)
         self.executor.shutdown(wait=False, cancel_futures=True)
         self.root.destroy()
 
     def refresh(self):
-        if self.redraw_job:
-            self.root.after_cancel(self.redraw_job)
-            self.redraw_job = None
         assumptions = self.assumptions()
         self.scenarios[self.active] = assumptions.copy()
-        for key, label in self.slider_labels.items():
-            suffix = "%" if key in ("growth", "margin") else "×" if key == "pe" else ""
-            label.configure(text=f"{assumptions[key]}{suffix}")
         if self.data is None:
             self.price_label.configure(text="Quote —  →  Future —")
             self.return_label.configure(text="— / year", bg=LINE, fg=WHITE)
@@ -434,7 +393,7 @@ class ValuationPanel:
         window = tk.Toplevel(self.root)
         window.title("Illustrative scenarios")
         window.configure(bg=NAVY)
-        self.label(window, "Select a scenario, then use the sliders to edit it.", 11, MUTED).pack(padx=18, pady=12)
+        self.label(window, "Compare the Bear, Base and Bull scenario presets.", 11, MUTED).pack(padx=18, pady=12)
         columns = ("Scenario", "Growth", "Margin", "P/E", "Years", "Future price", "Annual return")
         table = ttk.Treeview(window, columns=columns, show="headings", height=3)
         for column in columns:
@@ -446,7 +405,7 @@ class ValuationPanel:
                          scenario["pe"], scenario["years"], f'${outcome["price"]:,.2f}',
                          f'{outcome["annual_return"]:+.1%}'))
         table.pack(padx=18, pady=(0, 18))
-        # A modal snapshot cannot become stale while sliders are being edited.
+        # Keep the comparison visible until it is dismissed.
         window.transient(self.root)
         window.grab_set()
 
