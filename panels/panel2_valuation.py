@@ -1,7 +1,14 @@
+from locale import currency
+
+from matplotlib import ticker
 import yfinance as yf
 import plotly.express as px
+import plotly.graph_objects as go
 import pandas as pd
 import numpy as np
+from dash import Dash, dcc, html, dash_table, Input, Output
+import webbrowser
+import threading
 
 # Companies and sectors used for bubble colours.
 tickers = [
@@ -26,11 +33,11 @@ sector_map = {
 }
 
 
-NUMERIC_COLS = ['Market Cap ($T)', 'Forward P/E', 'Expected EPS Growth (%)']
+NUMERIC_COLS = ['Market Cap ($T)', 'Capital Expenditure ($B)', 'Annual Revenue ($B)']
 
 
 def load_valuation_data(selected_tickers):
-    """Download Yahoo Finance valuation metrics for the requested companies.
+    """Download Yahoo Finance financial metrics for the requested companies.
 
     A failed ticker is recorded with missing values so other tickers still load.
     """
@@ -38,23 +45,65 @@ def load_valuation_data(selected_tickers):
     failed_tickers = []
 
     for ticker in selected_tickers:
-        name, cap, pe, growth_pct = ticker, None, None, None
+        name, cap, capex, revenue = ticker, None, None, None
         try:
             company = yf.Ticker(ticker)
             info = company.info
             name = info.get('displayName') or info.get('shortName') or ticker
             cap = info.get('marketCap')
-            pe = info.get('forwardPE')
+            income = company.income_stmt
+            cashflow = company.cashflow
 
-            # Earnings-estimate growth is a fraction; convert to percentage.
-            estimates = company.earnings_estimate
-            if estimates is not None and '+1y' in estimates.index:
-                growth = estimates.loc['+1y', 'growth']
-                if pd.notna(growth):
-                    growth_pct = growth * 100
+            if not income.empty and not cashflow.empty:
+                if 'Total Revenue' in income.index and 'Capital Expenditure' in cashflow.index:
+                    common_years = income.columns.intersection(cashflow.columns)
+                    for year in sorted(common_years, reverse=True):
+                        rev = income.loc['Total Revenue', year]
+                        expenditure = cashflow.loc['Capital Expenditure', year]
+                        if pd.notna(rev) and pd.notna(expenditure):
+                             # Get currencies for financial statements and market cap
+                            currency = info.get('financialCurrency')
+                            market_currency = info.get('currency')
+                            
+                            if not currency:
+                                 raise ValueError(f"Financial currency unavailable for {ticker}")
+                            
+                            if cap is not None and not market_currency:
+                                 raise ValueError(f"Market cap currency unavailable for {ticker}")
+                            
+                            # Convert revenue and CapEx using historical exchange rates
+                            fx_rate = 1.0
+                            if currency != 'USD':
+                                 fx_ticker = f"{currency}USD=X"
+                                 fx_data = yf.Ticker(fx_ticker).history(
+                                      start=year - pd.DateOffset(years=1),
+                                      end=year + pd.Timedelta(days=1)
+                                )
+                                 
+                                 if fx_data.empty:
+                                     raise ValueError(f"No exchange rate available for {currency}")
+                                 
+                                 fx_rate = fx_data['Close'].dropna().mean()
+                                 
+                            revenue = rev * fx_rate / 1e9
+                            capex = abs(expenditure) * fx_rate / 1e9
+                            
+                            # Convert market cap using a recent exchange rate
+                            if cap is not None and market_currency != 'USD':
+                                fx_ticker = f"{market_currency}USD=X"
+                                fx_data = yf.Ticker(fx_ticker).history(period='5d')
+                                
+                                if fx_data.empty or fx_data['Close'].dropna().empty:
+                                    raise ValueError(f"No market cap exchange rate for {market_currency}")
+                                
+                                fx_rate_market = fx_data['Close'].dropna().iloc[-1]
+                                cap = cap * fx_rate_market
+                                
+                            break
 
         except Exception as error:
             failed_tickers.append(ticker)
+            cap, capex, revenue = None, None, None
             print(f"Error retrieving data for {ticker}: {error}")
 
         # One dictionary per ticker avoids misaligned separate data lists.
@@ -62,8 +111,8 @@ def load_valuation_data(selected_tickers):
             'Company': name,
             'Ticker': ticker,
             'Market Cap ($T)': cap / 1e12 if cap is not None else None, # Convert dollars to trillions
-            'Forward P/E': pe,
-            'Expected EPS Growth (%)': growth_pct,
+            'Capital Expenditure ($B)': capex,
+            'Annual Revenue ($B)': revenue,
             'Sector': sector_map.get(ticker, 'Other'),
         })
 
@@ -71,9 +120,8 @@ def load_valuation_data(selected_tickers):
         'Company', 'Ticker', *NUMERIC_COLS, 'Sector'
     ]), failed_tickers
 
-
 def prepare_chart_data(df):
-    """Remove missing/invalid bubble inputs; negative EPS growth is allowed."""
+    """Remove missing/invalid bubble inputs."""
 
     cleaned = df.copy()
     cleaned[NUMERIC_COLS] = cleaned[NUMERIC_COLS].apply(
@@ -82,17 +130,18 @@ def prepare_chart_data(df):
 
     chart_df = cleaned.dropna(subset=NUMERIC_COLS).copy()
     chart_df = chart_df[
-        (chart_df['Forward P/E'] > 0) &
+        (chart_df['Capital Expenditure ($B)'] > 0) &
+        (chart_df['Annual Revenue ($B)'] > 0) &
         (chart_df['Market Cap ($T)'] > 0)
     ].copy()
     return chart_df
 
 
 def calculate_regression(chart_df):
-    """Fit log(forward P/E) against expected EPS growth; return fit statistics."""
+    """Fit annual revenue against capital expenditure; return fit statistics."""
     # Using the displayed companies keeps the line consistent with the bubbles.
-    x = chart_df['Expected EPS Growth (%)']
-    y = np.log(chart_df['Forward P/E'])
+    x = chart_df['Capital Expenditure ($B)']
+    y = chart_df['Annual Revenue ($B)']
 
     # A slope needs at least two distinct X-values; R² needs variation in Y.
     if len(x) < 2 or x.nunique() < 2 or y.nunique() < 2:
@@ -105,7 +154,6 @@ def calculate_regression(chart_df):
     r_squared = 1 - ss_residual / ss_total
     return slope, intercept, r_squared, x
 
-
 def build_valuation_chart(chart_df, regression):
     """Build the interactive bubble chart with its legends and regression toggle."""
     slope, intercept, r_squared, x = regression
@@ -113,8 +161,8 @@ def build_valuation_chart(chart_df, regression):
     #Create scatter plot using company financial metrics 
     fig=px.scatter(
         chart_df,
-        x='Expected EPS Growth (%)',
-        y='Forward P/E',
+        x='Capital Expenditure ($B)',
+        y='Annual Revenue ($B)',
         size='Market Cap ($T)',
         color='Sector',
         color_discrete_map={
@@ -129,17 +177,17 @@ def build_valuation_chart(chart_df, regression):
         hover_data={
             'Ticker':False,
             'Market Cap ($T)':':.2f',
-            'Expected EPS Growth (%)':':.2f',
-            'Forward P/E':':.2f'    
+            'Capital Expenditure ($B)':':.2f',
+            'Annual Revenue ($B)':':.2f'    
         },
        
-        title='AI Companies: Valuation vs Earnings Growth'
+        title='The AI Bubble: Capital Investment vs Revenue'
     )
 
     #Calculate values for regression line
     if slope is not None:
         x_line=np.linspace(x.min(), x.max(), 100)
-        y_line=np.exp(slope*x_line + intercept)
+        y_line=slope*x_line + intercept
         
         #Add regression line to the scatter plot
         fig.add_scatter(
@@ -160,12 +208,12 @@ def build_valuation_chart(chart_df, regression):
 # Improve readability of bubbles and their ticker labels.
     fig.update_traces(
         marker=dict(
-            opacity=0.75,
+            opacity=1.0,
             line=dict(width=2, color='rgba(225,255,255,0.95)')
         ),
         textposition="middle center",
         selector=dict(mode='markers+text')
-        )
+    )
 
     #Apply dark theme and customize layout, axes, hover labels, and legend
     fig.update_layout(
@@ -178,7 +226,7 @@ def build_valuation_chart(chart_df, regression):
             font=dict(size=24, weight='bold'),
         ),    
         xaxis=dict(
-            title_text='<b>Expected EPS Growth (%)</b>',
+            title_text='<b>Capital Expenditure ($B)</b>',
             showline=True,
             linecolor='white',
             linewidth=2,
@@ -186,11 +234,9 @@ def build_valuation_chart(chart_df, regression):
             griddash='dash',
             zeroline=False
         ),
-        #Use a logarithmic scale to display a wide range of P/E ratios
         yaxis=dict(
-            title_text='<b>Forward P/E</b>',
-            type='log',
-            dtick='D2',
+            title_text='<b>Annual Revenue ($B)</b>',
+            type='linear',
             tickformat='.0f',
             showline=True,
             linecolor='white',
@@ -211,7 +257,7 @@ def build_valuation_chart(chart_df, regression):
         legend=dict(
             title='<b>Sector</b>',
             x=1.02,
-            y=1.00,
+            y=1.08,
             bgcolor='#061426',
             bordercolor='#1E3A5F',
             borderwidth=2,
@@ -222,16 +268,16 @@ def build_valuation_chart(chart_df, regression):
         x=0.59, y=1.2,
         xref='paper', yref='paper',
         xanchor='center',
-        text='Exploring the Relationship Between Expected Earnings Growth and Equity Valuations',
+        text='Exploring the Relationship Between Capital Expenditure and Annual Revenue',
         showarrow=False,
         font=dict(size=15, color='white')
         )
-    # Clarify what bubble size and the logarithmic axis represent.
+    # Clarify what bubble size represents.
     fig.add_annotation(
         x=0.59, y=1.15,
         xref='paper', yref='paper',
         xanchor='center',
-        text='Bubble Size = Market Capitalisation ($T) | Forward P/E on Logarithmic Scale',
+        text='Bubble Size = Market Capitalisation ($T)',
         showarrow=False,
         font=dict(size=13, color='#00D4FF')
         )
@@ -241,14 +287,14 @@ def build_valuation_chart(chart_df, regression):
         type='rect',
         xref='paper', yref='paper',
         x0=1.02, x1=1.20,
-        y0=0.31, y1=0.70,
+        y0=0.32, y1=0.75,
         line=dict(color='#1E3A5F', width=2),
         fillcolor='#061426'
     )
 
     # Market Cap legend title
     fig.add_annotation(
-        x=1.105, y=0.685,
+        x=1.105, y=0.725,
         xanchor='center',
         xref='paper', yref='paper',
         text='<b>Market Cap ($T)</b>',
@@ -256,14 +302,14 @@ def build_valuation_chart(chart_df, regression):
         font=dict(size=14, color='white')
     )
 
-    # Calculate legend bubble sizes using Plotly's scaling method
+   # Calculate legend bubble sizes using Plotly's scaling method
     max_cap=chart_df['Market Cap ($T)'].max()
-    size_max=75  
+    size_max=75
 
     for cap, y in[
-        (0.5,0.60),
-        (1.0,0.505),
-        (2.0,0.385)
+        (0.5,0.63),
+        (1.0,0.525),
+        (2.0,0.395)
     ]:
         size = size_max * np.sqrt(cap / max_cap) 
 
@@ -289,20 +335,19 @@ def build_valuation_chart(chart_df, regression):
             xanchor='left',
             font=dict(size=12, color='white')
         )
-
     # Reserve an information panel for regression fit and its visibility toggle.
     fig.add_shape(
         type='rect',
         xref='paper', yref='paper',
         x0=1.02, x1=1.20,
-        y0=0.01, y1=0.29,
+        y0=0.01, y1=0.32,
         line=dict(color='#1E3A5F', width=2),
         fillcolor='#061426'
     )
 
     # Label the regression information panel.
     fig.add_annotation(
-        x=1.11, y=0.255,
+        x=1.11, y=0.285,
         xanchor='center',
         yanchor='middle',
         xref='paper', yref='paper',
@@ -317,28 +362,21 @@ def build_valuation_chart(chart_df, regression):
         fig.add_annotation(
             x=1.11, y=0.16, xref='paper', yref='paper',
             text='Regression unavailable', showarrow=False,
-            font=dict(size=11, color='white')
+            font=dict(size=10, color='white')
         )
     else:
-        # Interpret fit strength using R² (descriptive only; not causation).
-        if r_squared < 0.1:
-            fit_label = 'Very weak fit'
-        elif r_squared < 0.3:
-            fit_label = 'Weak fit'
-        elif r_squared < 0.5:
-            fit_label = 'Moderate fit'
-        else:
-            fit_label = 'Stronger fit'
+        fit_label = f"{r_squared * 100:.1f}% of revenue variation<br>explained by CapEx"
+        
 
         fig.add_annotation(
             x=1.11, y=0.14, xanchor='center',
             xref='paper', yref='paper', text=fit_label,
-            showarrow=False, font=dict(size=11, color='white')
+            showarrow=False, font=dict(size=10, color='white')
         )
         interpretation_index = len(fig.layout.annotations) - 1
 
         fig.add_annotation(
-            x=1.11, y=0.185, xanchor='center',
+            x=1.11, y=0.205, xanchor='center',
             xref='paper', yref='paper',
             text=f"<b>R² = {r_squared:.6f}</b>",
             showarrow=False, font=dict(size=15, color='#FFD166')
@@ -353,10 +391,10 @@ def build_valuation_chart(chart_df, regression):
             direction='right', 
             showactive=True, 
             active=0,
-            x=1.11, y=0.09, 
+            x=1.11, y=0.075, 
             xanchor='center', yanchor='middle',
             bgcolor='#607D9F', bordercolor='#00D4FF', borderwidth=1,
-            font=dict(size=12, color='#061426'),
+            font=dict(size=12, color='black'),
             pad=dict(l=2, r=2, t=2, b=2),
             buttons=[
                 dict(label='On', method='update', args=[
@@ -373,10 +411,9 @@ def build_valuation_chart(chart_df, regression):
                 ])
             ]
         )])
-
     return fig
 
-
+    
 def show_panel2(selected_tickers=tickers):
     """Run the valuation panel as a standalone Plotly chart."""
     df, failed_tickers = load_valuation_data(selected_tickers)
@@ -397,10 +434,189 @@ def show_panel2(selected_tickers=tickers):
         print('Insufficient valid data or variation to calculate regression.')
     else:
         print(f'R-squared: {regression[2]:.6f}')
-
+    
+    # Both views use the same selected companies.
     fig = build_valuation_chart(chart_df, regression)
-    fig.show()
+
+    table_df = chart_df[[
+        'Ticker',
+        'Company',
+        'Sector',
+        'Capital Expenditure ($B)',
+        'Annual Revenue ($B)',
+        'Market Cap ($T)'
+    ]].sort_values('Ticker').copy()
+
+    # Format the financial figures
+    table_df = table_df.rename(columns={
+        'Capital Expenditure ($B)': 'CapEx ($B)',
+        'Annual Revenue ($B)': 'Revenue ($B)'
+    })
+
+    # Create the Dash app
+    app = Dash(__name__)
+
+    tab_style = {
+        'backgroundColor': '#102D47',
+        'color': 'white',
+        'border': '1px solid #1E3A5F',
+        'padding': '12px'
+    }
+
+    selected_tab_style = {
+        **tab_style,
+        'backgroundColor': '#FFFFFF',
+        'color': '#031A2F',
+        'fontWeight': 'bold',
+        'borderTop': '2px solid #00D4FF'
+    }
+
+    app.layout = html.Div(
+        [
+            # Graph / Table toggle
+            dcc.Tabs(
+                id='view-toggle',
+                value='graph',
+                children=[
+                    dcc.Tab(
+                        label='Graph',
+                        value='graph',
+                        style=tab_style,
+                        selected_style=selected_tab_style
+                    ),
+                    dcc.Tab(
+                        label='Table',
+                        value='table',
+                        style=tab_style,
+                        selected_style=selected_tab_style
+                    )
+                ],
+                style={
+                    'width': '220px',
+                    'margin': '0 auto'
+                }
+            ),
+
+            # This area changes when the toggle is clicked
+            html.Div(id='view-content')
+        ],
+        style={
+            'backgroundColor': '#031A2F',
+            'minHeight': '100vh',
+            'margin': '0',
+            'padding': '8px 0',
+            'color': 'white',
+            'fontFamily': 'Arial'
+        }
+    )
+
+    # Switch between the original graph and the table
+    @app.callback(
+        Output('view-content', 'children'),
+        Input('view-toggle', 'value')
+    )
+    def switch_view(view):
+
+        if view == 'graph':
+            return dcc.Graph(
+                figure=fig,
+                style={
+                    'width': '100%',
+                    'height': 'calc(100vh - 65px)'
+                },
+                config={'responsive': True}
+            )
+
+        else:
+            return html.Div(
+                [
+                    html.H2(
+                        'The AI Bubble: Company Comparison',
+                        style={
+                            'textAlign': 'center',
+                            'padding': '25px'
+                        }
+                    ),
+
+                    dash_table.DataTable(
+                        data=table_df.to_dict('records'),
+                        columns=[
+                            {
+                                'name': col,
+                                'id': col,
+                                'type': 'numeric' if col in [
+                                    'CapEx ($B)',
+                                    'Revenue ($B)',
+                                    'Market Cap ($T)'
+                                ] else 'text',
+                                'format': {'specifier': ',.2f'} if col in [
+                                    'CapEx ($B)',
+                                    'Revenue ($B)',
+                                    'Market Cap ($T)'
+                                ] else {}
+                            }
+                            for col in table_df.columns
+                        ],
+                    
+                        sort_action='native',
+                        page_action='none',
+
+                        style_table={
+                            'width': '95%',
+                            'margin': 'auto',
+                            'overflowX': 'auto'
+                        },
+
+                        style_header={
+                            'backgroundColor': '#163954',
+                            'color': 'white',
+                            'fontWeight': 'bold',
+                            'border': '1px solid #2D5474',
+                            'padding': '15px'
+                        },
+
+                        style_cell={
+                            'backgroundColor': '#0B2943',
+                            'color': 'white',
+                            'border': '1px solid #23445E',
+                            'padding': '14px',
+                            'textAlign': 'left',
+                            'fontFamily': 'Arial',
+                            'fontSize': '14px'
+                        },
+
+                        style_data_conditional=[
+                            {
+                                'if': {'row_index': 'odd'},
+                                'backgroundColor': '#102F49'
+                            }
+                        ]
+                    )
+                ]
+            )
+
+    # Start the dashboard
+    app.run(
+        debug=False,
+        host='127.0.0.1',
+        port=8050
+    )
+
+def open_dashboard():
+    import time
+    import urllib.request
+
+    url = 'http://127.0.0.1:8050/'
+
+    while True:
+        try:
+            urllib.request.urlopen(url, timeout=1)
+            webbrowser.open(url)
+            break
+        except Exception:
+            time.sleep(0.2)
 
 
 if __name__ == '__main__':
+    threading.Thread(target=open_dashboard, daemon=True).start()
     show_panel2()
