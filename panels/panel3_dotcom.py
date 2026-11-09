@@ -190,7 +190,6 @@ def create_forecast(start_value, target_return, months=24):
         * np.sin(np.pi * t / months)
         * np.sin(2 * np.pi * t / 7)
     )
-
     values = start_value * np.exp(trend + fluctuation)
 
     values[0] = start_value
@@ -298,10 +297,29 @@ def render_panel3(selected_companies=None):
 
     forecast_x = last_month + np.arange(25)
 
+    # Estimate volatility from completed month ends, excluding the partial month.
+    month_ends = ai.resample("ME").last().dropna()
+    current_month = (
+        pd.Timestamp.now(tz="America/New_York")
+        .tz_localize(None).normalize().replace(day=1)
+    )
+    month_ends = month_ends.loc[month_ends.index < current_month]
+    monthly_log_returns = np.log(month_ends / month_ends.shift(1)).dropna()
+    if len(monthly_log_returns) < 2:
+        raise ValueError(
+            "At least three completed month-end observations are needed "
+            "for the volatility-based scenarios."
+        )
+
+    sigma = float(monthly_log_returns.std(ddof=1))
+    months = 24
+    z = 1.645
+    spread = z * sigma * np.sqrt(months)
+    # Base is assumed; historical volatility determines the Bull/Bear dispersion.
     scenarios = [
-        ("Bull", 0.44, GREEN),
+        ("Bull", 1.166 * np.exp(spread) - 1, GREEN),
         ("Base", 0.166, PURPLE),
-        ("Bear", -0.40, PINK)
+        ("Bear", 1.166 * np.exp(-spread) - 1, PINK)
     ]
 
     for name, target_return, colour in scenarios:
@@ -320,12 +338,15 @@ def render_panel3(selected_companies=None):
                 width=2.5,
                 dash="dash"
             ),
-            customdata=(forecast_y / last_value - 1) * 100,
+            customdata=np.column_stack((
+                np.arange(25),
+                (forecast_y / last_value - 1) * 100
+            )),
             hovertemplate=(
                 f"<b>{name} Scenario · Illustrative</b><br>"
-                "Month: %{x}<br>"
+                "Forecast month: %{customdata[0]:.0f} of 24<br>"
                 "Projected index: %{y:.2f}<br>"
-                "Return from forecast start: %{customdata:+.2f}%<br>"
+                "Return from forecast start: %{customdata[1]:+.2f}%<br>"
                 f"24-month target: {target_return:+.1%}"
                 "<extra></extra>"
             )
@@ -448,6 +469,65 @@ def render_panel3(selected_companies=None):
 # 7. DASH HEADER AND METRICS
 # ---------------------------------------
 
+def nasdaq_crash_detail():
+    # Identify the daily peak and trough behind the historical drawdown KPI.
+    nasdaq = calculate_nasdaq()
+    drawdown = nasdaq / nasdaq.cummax() - 1
+    trough_date = drawdown.idxmin()
+    peak_date = nasdaq.loc[:trough_date].idxmax()
+    crash = nasdaq.loc[peak_date:trough_date]
+
+    detail = go.Figure(go.Scatter(
+        x=crash.index, y=crash, mode="lines",
+        line=dict(color=BLUE, width=2.5),
+        customdata=(crash / crash.iloc[0] - 1) * 100,
+        hovertemplate=(
+            "<b>NASDAQ · Historical crash</b><br>"
+            "%{x|%d %b %Y}<br>Index (base 100): %{y:.2f}<br>"
+            "Return from peak: %{customdata:+.2f}%<extra></extra>"
+        )
+    ))
+    for label, date, anchor in [
+        ("Peak", peak_date, "left"),
+        ("Trough", trough_date, "right")
+    ]:
+        detail.add_annotation(
+            x=date, y=float(nasdaq.loc[date]),
+            text=f"<b>{label}</b> · {date:%d %b %Y}",
+            showarrow=False, xanchor=anchor, yanchor="bottom", yshift=8,
+            font=dict(size=12, color="#E2E8F0"), bgcolor=NAVY, borderpad=3
+        )
+
+    detail.add_annotation(
+        x=0.96, y=0.85, xref="paper", yref="paper",
+        text=f"<b>−{abs(drawdown.min()):.1%} Peak-to-Trough</b>",
+        showarrow=False, xanchor="right", yanchor="top",
+        font=dict(size=17, color=PINK), bgcolor=NAVY, borderpad=5
+    )
+
+    # A separate, explicitly labelled zoom leaves the main graph's scale intact.
+    padding = float(crash.max() - crash.min()) * 0.15
+    detail.update_layout(
+        title=dict(
+            text=f"NASDAQ crash detail · Peak-to-trough drawdown {drawdown.min():.1%}",
+            font=dict(size=14), x=0.02
+        ),
+        paper_bgcolor=NAVY, plot_bgcolor=NAVY,
+        font=dict(family="Inter, Segoe UI, Arial, sans-serif", color="#CBD5E1", size=12),
+        height=350, margin=dict(l=60, r=30, t=65, b=45), showlegend=False,
+        hoverlabel=dict(bgcolor="#172338", bordercolor="#334155", font_color="#F8FAFC")
+    )
+    detail.update_xaxes(
+        tickformat="%b %Y", nticks=6, showgrid=False, zeroline=False
+    )
+    detail.update_yaxes(
+        title="NASDAQ index · Base 100", automargin=True,
+        range=[float(crash.min()) - padding, float(crash.max()) + padding],
+        gridcolor="rgba(148,163,184,0.07)", zeroline=False
+    )
+    return detail
+
+
 def metric_card(label, value, colour):
 
     return html.Div(
@@ -490,6 +570,7 @@ def panel3_layout(selected_companies=None):
 
     try:
         fig = render_panel3(selected_companies)
+        crash_detail = nasdaq_crash_detail()
     except ValueError as error:
         return html.P(
             f"Unable to load Panel 3. {error}",
@@ -566,11 +647,21 @@ def panel3_layout(selected_companies=None):
                 style={"width": "100%", "minWidth": "0", "height": "740px"}
             ),
 
+            dcc.Graph(
+                figure=crash_detail,
+                config={"displaylogo": False, "displayModeBar": False, "responsive": True},
+                responsive=True,
+                style={"width": "100%", "minWidth": "0", "height": "350px"}
+            ),
+
             html.P(
                 f"AI portfolio: {metrics['company_count']} companies, "
                 "equally weighted at inception. "
-                "Forecasts are illustrative 24-month scenarios, "
-                "not statistically validated predictions.",
+                "The 24-month Base return is assumed at +16.6%; "
+                "Bull/Bear are illustrative volatility-based scenarios using "
+                "completed monthly log returns (z = 1.645), "
+                "not statistically validated predictions. Intermediate fluctuations "
+                "are illustrative, not statistically simulated forecasts.",
                 style={
                     "color": "#94A3B8",
                     "fontSize": "12px",
