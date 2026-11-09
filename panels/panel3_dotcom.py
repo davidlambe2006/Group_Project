@@ -5,7 +5,8 @@ import yfinance as yf
 import plotly.graph_objects as go
 
 from functools import lru_cache
-from dash import Dash, dcc, html, Input, Output
+from pathlib import Path
+from dash import Dash, dcc, html, Input, Output, ctx
 
 
 # All 12 companies, selected by default
@@ -28,17 +29,40 @@ PINK = "#FB7185"
 # 1. DOWNLOAD DATA
 # ---------------------------------------
 
+@lru_cache(maxsize=1)
+def trading_session_closes(session_date):
+    # The date is the cache key: refresh the schedule on each New York day.
+    # Yahoo's schedule includes holidays and early closing times.
+    try:
+        metadata = yf.Ticker("^IXIC").get_history_metadata()
+        schedule = metadata["tradingPeriods"]
+        closes = pd.DatetimeIndex(pd.to_datetime(schedule["end"], utc=True))
+        if closes.empty or closes.isna().any():
+            raise ValueError("Missing session closing times.")
+        return closes
+    except Exception as error:
+        raise ValueError(
+            "Unable to check completed trading sessions. Please try again shortly."
+        ) from error
+
+
 @lru_cache(maxsize=32)
 def download_prices(tickers, start, end=None):
-    data = yf.download(
-        list(tickers),
-        start=start,
-        end=end,
-        auto_adjust=True,
-        progress=False
-    )
-
-    prices = data["Close"]
+    try:
+        data = yf.download(
+            list(tickers),
+            start=start,
+            end=end,
+            auto_adjust=True,
+            progress=False
+        )
+        if data is None or data.empty:
+            raise ValueError("No prices returned.")
+        prices = data["Close"].copy()
+    except Exception as error:
+        raise ValueError(
+            "Yahoo Finance prices are unavailable. Please try again shortly."
+        ) from error
 
     if isinstance(prices, pd.Series):
         prices = prices.to_frame(name=tickers[0])
@@ -48,6 +72,28 @@ def download_prices(tickers, start, end=None):
         str(col).upper() for col in prices.columns
     ]
 
+    missing = set(tickers) - set(prices.columns)
+    if missing:
+        raise ValueError(f"Missing price data for: {', '.join(sorted(missing))}.")
+
+    if not isinstance(prices.index, pd.DatetimeIndex) or prices.index.hasnans:
+        raise ValueError("Yahoo Finance returned invalid price dates. Please retry.")
+
+    prices.index = prices.index.tz_localize(None)
+    prices = prices.sort_index().apply(pd.to_numeric, errors="coerce")
+    # Enforce the requested range; Yahoo's end date is exclusive.
+    prices = prices.loc[prices.index >= pd.Timestamp(start)]
+    if end is not None:
+        prices = prices.loc[prices.index < pd.Timestamp(end)]
+
+    if prices.index.has_duplicates or ((prices <= 0) | np.isinf(prices)).any().any():
+        raise ValueError("Yahoo Finance returned invalid prices. Please retry.")
+
+    unavailable = [ticker for ticker in tickers if prices[ticker].dropna().empty]
+    if unavailable:
+        raise ValueError(f"No valid price data for: {', '.join(unavailable)}. Please retry.")
+
+    # Failed downloads raise above, so they are not retained in the price cache.
     return prices.dropna(how="all")
 
 
@@ -67,8 +113,18 @@ def calculate_ai_portfolio(selected_companies, start_date="2023-01-01"):
     if invalid:
         raise ValueError(f"Unknown companies: {invalid}")
 
+    now = pd.Timestamp.now(tz="America/New_York")
+    closes = trading_session_closes(now.strftime("%Y-%m-%d"))
+    completed = closes[closes <= now]
+    if completed.empty:
+        raise ValueError("No completed trading session is available. Please retry shortly.")
+    # Including only dates before the following day excludes unfinished sessions.
+    end_date = (
+        completed.max().tz_convert("America/New_York").normalize()
+        + pd.DateOffset(days=1)
+    ).strftime("%Y-%m-%d")
     prices = download_prices(
-        tuple(sorted(selected)), start_date
+        tuple(sorted(selected)), start_date, end_date
     )
 
     # All selected stocks must have a valid price
@@ -147,6 +203,27 @@ def create_forecast(start_value, target_return, months=24):
 # 4. BUILD THE PLOTLY GRAPH
 # ---------------------------------------
 
+def monthly_with_latest(series):
+    monthly = series.resample("MS").first().dropna()
+    # Keep monthly samples, adding the actual latest observation only if new.
+    latest_date = series.index[-1]
+    first_in_last_month = series.loc[series.index >= monthly.index[-1]].index[0]
+    if latest_date > first_in_last_month:
+        monthly.loc[latest_date] = series.iloc[-1]
+
+    # Whole calendar months for existing samples; a fraction for the daily end.
+    x = (
+        (monthly.index.year - series.index[0].year) * 12
+        + monthly.index.month - series.index[0].month
+        + (monthly.index.day - 1) / monthly.index.days_in_month
+    ).to_numpy(dtype=float, copy=True)
+    # If the final month has just one observation, position that point by its
+    # actual date rather than adding the same observation a second time.
+    if latest_date == first_in_last_month and len(monthly) > 1:
+        x[-1] += (latest_date.day - 1) / latest_date.days_in_month
+    return monthly, x
+
+
 def render_panel3(selected_companies=None):
 
     if selected_companies is None:
@@ -160,8 +237,8 @@ def render_panel3(selected_companies=None):
     ai_return, ai_dd = calculate_metrics(ai)
 
     # Monthly observations
-    nasdaq_monthly = nasdaq.resample("MS").first().dropna()
-    ai_monthly = ai.resample("MS").first().dropna()
+    nasdaq_monthly, nasdaq_x = monthly_with_latest(nasdaq)
+    ai_monthly, ai_x = monthly_with_latest(ai)
 
     # Rebase displayed monthly series to 100
     nasdaq_monthly = (
@@ -171,8 +248,9 @@ def render_panel3(selected_companies=None):
         ai_monthly / ai_monthly.iloc[0] * 100
     )
 
-    nasdaq_x = np.arange(len(nasdaq_monthly))
-    ai_x = np.arange(len(ai_monthly))
+    # Preserve the exact daily endpoints, avoiding rebasing round-off differences.
+    nasdaq_monthly.iloc[-1] = nasdaq.iloc[-1]
+    ai_monthly.iloc[-1] = ai.iloc[-1]
 
     fig = go.Figure()
 
@@ -182,11 +260,13 @@ def render_panel3(selected_companies=None):
         y=nasdaq_monthly,
         mode="lines",
         name="Dot-Com Era · NASDAQ",
-        line=dict(color=BLUE, width=3),
+        line=dict(color=BLUE, width=3.5),
+        customdata=nasdaq_monthly.to_numpy() - 100,
         hovertemplate=(
             "<b>Dot-Com Era · NASDAQ</b><br>"
             "Month: %{x}<br>"
-            "Index: %{y:.2f}<br>"
+            "Index (base 100): %{y:.2f}<br>"
+            "Return since start: %{customdata:+.2f}%"
             "<extra></extra>"
         )
     ))
@@ -202,21 +282,21 @@ def render_panel3(selected_companies=None):
         hovertemplate=(
             "<b>Modern AI Portfolio</b><br>"
             "Month: %{x}<br>"
-            "Index: %{y:.2f}<br>"
+            "Index (base 100): %{y:.2f}<br>"
             "Return since start: %{customdata:+.2f}%"
             "<extra></extra>"
 
-)
+        )
     ))
 
     # -----------------------------------
     # 5. ADD THE THREE FORECASTS
     # -----------------------------------
 
-    last_month = int(ai_x[-1])
+    last_month = float(ai_x[-1])
     last_value = float(ai_monthly.iloc[-1])
 
-    forecast_x = np.arange(last_month, last_month + 25)
+    forecast_x = last_month + np.arange(25)
 
     scenarios = [
         ("Bull", 0.44, GREEN),
@@ -240,10 +320,12 @@ def render_panel3(selected_companies=None):
                 width=2.5,
                 dash="dash"
             ),
+            customdata=(forecast_y / last_value - 1) * 100,
             hovertemplate=(
                 f"<b>{name} Scenario · Illustrative</b><br>"
                 "Month: %{x}<br>"
                 "Projected index: %{y:.2f}<br>"
+                "Return from forecast start: %{customdata:+.2f}%<br>"
                 f"24-month target: {target_return:+.1%}"
                 "<extra></extra>"
             )
@@ -253,10 +335,14 @@ def render_panel3(selected_companies=None):
             x=forecast_x[-1],
             y=forecast_y[-1],
             text=f"<b>{name} {target_return:+.1%}</b>",
+            # Keep labels separate from the data: no coloured connector lines.
             showarrow=False,
             xanchor="left",
-            xshift=8,
-            font=dict(size=11, color=colour)
+            xshift=10,
+            yshift={"Bull": 18, "Base": 0, "Bear": -18}[name],
+            bgcolor=NAVY,
+            borderpad=5,
+            font=dict(size=13, color=colour)
         )
 
     # Subtle forecast boundary
@@ -265,6 +351,11 @@ def render_panel3(selected_companies=None):
         line_color="rgba(203,213,225,0.35)",
         line_width=1,
         line_dash="dot"
+    )
+    fig.add_annotation(
+        x=last_month, y=0, yref="paper", yshift=12,
+        text="Forecast starts", showarrow=False,
+        font=dict(size=11, color="#CBD5E1"), bgcolor=NAVY
     )
 
     # -----------------------------------
@@ -275,9 +366,9 @@ def render_panel3(selected_companies=None):
         paper_bgcolor=NAVY,
         plot_bgcolor=NAVY,
         font=dict(
-            family="Arial",
+            family="Inter, Segoe UI, Arial, sans-serif",
             color="#CBD5E1",
-            size=12
+            size=13
         ),
 
         xaxis_title="Months Since Start",
@@ -290,41 +381,53 @@ def render_panel3(selected_companies=None):
             bordercolor="#334155",
             font=dict(
                 color="#F8FAFC",
-                size=12
+                size=13
             )
         ),
 
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.03,
-            xanchor="left",
-            x=0,
-            font=dict(size=11)
-        ),
+        
+            legend=dict(
+              orientation="h",
+              yanchor="bottom",
+              y=1.02,
+              xanchor="left",
+              x=0,
+              font=dict(size=15, color="#F1F5F9"),
+              itemsizing="constant",
+              itemwidth=40,
+            tracegroupgap=0
+),
+
 
         margin=dict(
-            l=65,
-            r=125,
-            t=85,
+            l=60,
+            r=115,
+            t=65,
             b=65
         ),
 
-        height=570,
+        height=740,
+        autosize=True,
 
         hoverdistance=30
     )
 
     fig.update_xaxes(
         showgrid=True,
-        gridcolor="rgba(148,163,184,0.10)",
+        gridcolor="rgba(148,163,184,0.07)",
+        automargin=True,
+        title_standoff=18,
+        tickfont=dict(size=12, color="#CBD5E1"),
         zeroline=False,
         showline=False
     )
 
     fig.update_yaxes(
         showgrid=True,
-        gridcolor="rgba(148,163,184,0.10)",
+        gridcolor="rgba(148,163,184,0.07)",
+        automargin=True,
+        title_standoff=18,
+        tickfont=dict(size=12, color="#CBD5E1"),
         zeroline=False,
         showline=False
     )
@@ -352,27 +455,30 @@ def metric_card(label, value, colour):
             html.Div(
                 label,
                 style={
-                    "color": "#94A3B8",
+                    "color": "#B7C5D8",
                     "fontSize": "12px",
-                    "marginBottom": "9px"
+                    "marginBottom": "12px",
+                    "letterSpacing": "0.7px",
+                    "lineHeight": "1.5"
                 }
             ),
             html.Div(
                 value,
                 style={
                     "color": colour,
-                    "fontSize": "25px",
-                    "fontWeight": "bold"
+                    "fontSize": "28px",
+                    "fontWeight": "600",
+                    "fontVariantNumeric": "tabular-nums"
                 }
             )
         ],
         style={
             "backgroundColor": "#131F31",
-            "padding": "18px",
+            "padding": "20px",
             "border": "1px solid #263449",
             "borderRadius": "10px",
-            "flex": "1",
-            "minWidth": "150px"
+            "flex": "1 1 180px",
+            "minWidth": "0"
         }
     )
 
@@ -382,18 +488,26 @@ def panel3_layout(selected_companies=None):
     if selected_companies is None:
         selected_companies = DEFAULT_AI_COMPANIES
 
-    fig = render_panel3(selected_companies)
+    try:
+        fig = render_panel3(selected_companies)
+    except ValueError as error:
+        return html.P(
+            f"Unable to load Panel 3. {error}",
+            style={"color": "white"}
+        )
 
     metrics = fig.layout.meta
 
     return html.Div(
         [
             html.H2(
-                "AI BOOM vs. DOT-COM BUBBLE",
+                "AI Boom vs. Dot-Com Bubble",
                 style={
                     "color": "#F8FAFC",
                     "marginBottom": "6px",
-                    "letterSpacing": "0.5px"
+                    "letterSpacing": "-0.5px",
+                    "fontSize": "clamp(23px, 3vw, 32px)",
+                    "marginTop": "0"
                 }
             ),
 
@@ -409,9 +523,9 @@ def panel3_layout(selected_companies=None):
             html.Div(
                 [
                     metric_card(
-                        "NASDAQ TOTAL RETURN",
+                        "NASDAQ PRICE RETURN",
                         f"{metrics['nasdaq_return']:+.1f}%",
-                        BLUE
+                        GREEN if metrics['nasdaq_return'] >= 0 else PINK
                     ),
                     metric_card(
                         "NASDAQ MAX DRAWDOWN",
@@ -421,7 +535,7 @@ def panel3_layout(selected_companies=None):
                     metric_card(
                         "AI PORTFOLIO RETURN",
                         f"{metrics['ai_return']:+.1f}%",
-                        CYAN
+                        GREEN if metrics['ai_return'] >= 0 else PINK
                     ),
                     metric_card(
                         "AI MAX DRAWDOWN",
@@ -437,13 +551,19 @@ def panel3_layout(selected_companies=None):
                 }
             ),
 
+            html.Div(
+                "Solid lines · historical observations    /    Dashed lines · illustrative scenarios",
+                style={"color": "#B7C5D8", "fontSize": "12px", "lineHeight": "1.7"}
+            ),
             dcc.Graph(
                 figure=fig,
                 config={
                     "displaylogo": False,
                     "responsive": True
                 },
-                style={"width": "100%"}
+                # An explicit container height survives Dash's responsive resizing.
+                responsive=True,
+                style={"width": "100%", "minWidth": "0", "height": "740px"}
             ),
 
             html.P(
@@ -452,17 +572,19 @@ def panel3_layout(selected_companies=None):
                 "Forecasts are illustrative 24-month scenarios, "
                 "not statistically validated predictions.",
                 style={
-                    "color": "#64748B",
+                    "color": "#94A3B8",
                     "fontSize": "12px",
-                    "marginTop": "8px"
+                    "marginTop": "8px",
+                    "lineHeight": "1.7"
                 }
             )
         ],
         style={
             "backgroundColor": NAVY,
-            "padding": "25px",
+            "padding": "clamp(14px, 2.5vw, 28px)",
+            "minWidth": "0",
             "borderRadius": "14px",
-            "fontFamily": "Arial"
+            "fontFamily": "Inter, Segoe UI, Arial, sans-serif"
         }
     )
 
@@ -473,7 +595,7 @@ def panel3_layout(selected_companies=None):
 
 if __name__ == "__main__":
 
-    app = Dash(__name__)
+    app = Dash(__name__, assets_folder=str(Path(__file__).parent / "panel3_assets"))
 
     app.layout = html.Div(
         [
@@ -481,8 +603,14 @@ if __name__ == "__main__":
                 [
                     html.Label(
                         "AI Companies",
+                        htmlFor="global-company-selector",
                         style={"color": "#CBD5E1"}
                     ),
+                    html.Span(id="panel3-selection-count", className="panel3-selection-count"),
+                    html.Div([
+                        html.Button("Select All", id="panel3-select-all", n_clicks=0),
+                        html.Button("Deselect All", id="panel3-deselect-all", n_clicks=0)
+                    ], className="panel3-selection-actions"),
 
                     dcc.Dropdown(
                         id="global-company-selector",
@@ -491,12 +619,30 @@ if __name__ == "__main__":
                             for ticker in DEFAULT_AI_COMPANIES
                         ],
                         value=list(DEFAULT_AI_COMPANIES),
-                        multi=True
+                        multi=True,
+                        placeholder="Search companies…",
+                        className="panel3-company-select",
+                        style={"backgroundColor": NAVY, "color": "#F1F5F9"}
                     )
                 ],
+                className="panel3-selector",
                 style={
                     "marginBottom": "20px",
-                    "maxWidth": "750px"
+                    "width": "100%",
+                    "maxWidth": "1000px",
+                    # Dash 4 styles its trigger and popup using theme variables.
+                    "--Dash-Fill-Inverse-Strong": NAVY,
+                    "--Dash-Fill-Interactive-Strong": CYAN,
+                    "--Dash-Fill-Interactive-Weak": "#153343",
+                    "--Dash-Fill-Primary-Hover": "#1E334B",
+                    "--Dash-Fill-Primary-Active": "#153343",
+                    "--Dash-Fill-Disabled": "#263449",
+                    "--Dash-Stroke-Strong": "#334155",
+                    "--Dash-Stroke-Weak": "#263449",
+                    "--Dash-Text-Primary": "#F1F5F9",
+                    "--Dash-Text-Strong": "#F1F5F9",
+                    "--Dash-Text-Weak": "#CBD5E1",
+                    "--Dash-Text-Disabled": "#94A3B8"
                 }
             ),
 
@@ -505,9 +651,26 @@ if __name__ == "__main__":
         style={
             "backgroundColor": "#080F1C",
             "minHeight": "100vh",
-            "padding": "25px"
+            "padding": "clamp(12px, 2vw, 25px)",
+            "fontFamily": "Inter, Segoe UI, Arial, sans-serif"
         }
     )
+
+    @app.callback(
+        Output("global-company-selector", "value"),
+        Input("panel3-select-all", "n_clicks"),
+        Input("panel3-deselect-all", "n_clicks"),
+        prevent_initial_call=True
+    )
+    def select_companies(select_clicks, deselect_clicks):
+        return list(DEFAULT_AI_COMPANIES) if ctx.triggered_id == "panel3-select-all" else []
+
+    @app.callback(
+        Output("panel3-selection-count", "children"),
+        Input("global-company-selector", "value")
+    )
+    def selection_count(selected_companies):
+        return f"{len(selected_companies or [])} / {len(DEFAULT_AI_COMPANIES)} selected"
 
     @app.callback(
         Output("panel3-content", "children"),
