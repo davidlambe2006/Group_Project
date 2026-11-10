@@ -1,5 +1,6 @@
 from locale import currency
 
+from flask import app
 from matplotlib import ticker
 import yfinance as yf
 import plotly.express as px
@@ -7,8 +8,7 @@ import plotly.graph_objects as go
 import pandas as pd
 import numpy as np
 from dash import Dash, dcc, html, dash_table, Input, Output
-import webbrowser
-import threading
+
 
 # Companies and sectors used for bubble colours.
 tickers = [
@@ -596,27 +596,8 @@ def show_panel2(selected_tickers=tickers):
             )
 
     # Start the dashboard
-    app.run(
-        debug=False,
-        host='127.0.0.1',
-        port=8050
-    )
-
-def open_dashboard():
-    import time
-    import urllib.request
-
-    url = 'http://127.0.0.1:8050/'
-
-    while True:
-        try:
-            urllib.request.urlopen(url, timeout=1)
-            webbrowser.open(url)
-            break
-        except Exception:
-            time.sleep(0.2)
+    app.run(debug=False)
 
 
 if __name__ == '__main__':
-    threading.Thread(target=open_dashboard, daemon=True).start()
     show_panel2()
