@@ -1,10 +1,5 @@
-from locale import currency
-
-from flask import app
-from matplotlib import ticker
 import yfinance as yf
 import plotly.express as px
-import plotly.graph_objects as go
 import pandas as pd
 import numpy as np
 from dash import Dash, dcc, html, dash_table, Input, Output
@@ -128,12 +123,12 @@ def prepare_chart_data(df):
         pd.to_numeric, errors='coerce'
     ).replace([np.inf, -np.inf], np.nan)
 
-    chart_df = cleaned.dropna(subset=NUMERIC_COLS).copy()
+    chart_df = cleaned.dropna(subset=NUMERIC_COLS)
     chart_df = chart_df[
         (chart_df['Capital Expenditure ($B)'] > 0) &
         (chart_df['Annual Revenue ($B)'] > 0) &
         (chart_df['Market Cap ($T)'] > 0)
-    ].copy()
+    ]
     return chart_df
 
 
@@ -157,6 +152,7 @@ def calculate_regression(chart_df):
 def build_valuation_chart(chart_df, regression):
     """Build the interactive bubble chart with its legends and regression toggle."""
     slope, intercept, r_squared, x = regression
+    size_max = 75  # Maximum bubble size in pixels
 
     #Create scatter plot using company financial metrics 
     fig=px.scatter(
@@ -172,7 +168,7 @@ def build_valuation_chart(chart_df, regression):
             'Consumer & EV':'#B477FF'
         },
         text='Ticker',
-        size_max=75,
+        size_max=size_max,
         hover_name='Company',
         hover_data={
             'Ticker':False,
@@ -236,7 +232,6 @@ def build_valuation_chart(chart_df, regression):
         ),
         yaxis=dict(
             title_text='<b>Annual Revenue ($B)</b>',
-            type='linear',
             tickformat='.0f',
             showline=True,
             linecolor='white',
@@ -304,7 +299,6 @@ def build_valuation_chart(chart_df, regression):
 
    # Calculate legend bubble sizes using Plotly's scaling method
     max_cap=chart_df['Market Cap ($T)'].max()
-    size_max=75
 
     for cap, y in[
         (0.5,0.63),
@@ -445,13 +439,18 @@ def show_panel2(selected_tickers=tickers):
         'Capital Expenditure ($B)',
         'Annual Revenue ($B)',
         'Market Cap ($T)'
-    ]].sort_values('Ticker').copy()
+    ]].sort_values('Ticker')
 
     # Format the financial figures
     table_df = table_df.rename(columns={
         'Capital Expenditure ($B)': 'CapEx ($B)',
         'Annual Revenue ($B)': 'Revenue ($B)'
     })
+    numeric_table_cols = [
+        'CapEx ($B)',
+        'Revenue ($B)',
+        'Market Cap ($T)'
+    ]
 
     # Create the Dash app
     app = Dash(__name__)
@@ -544,16 +543,8 @@ def show_panel2(selected_tickers=tickers):
                             {
                                 'name': col,
                                 'id': col,
-                                'type': 'numeric' if col in [
-                                    'CapEx ($B)',
-                                    'Revenue ($B)',
-                                    'Market Cap ($T)'
-                                ] else 'text',
-                                'format': {'specifier': ',.2f'} if col in [
-                                    'CapEx ($B)',
-                                    'Revenue ($B)',
-                                    'Market Cap ($T)'
-                                ] else {}
+                                'type': 'numeric' if col in numeric_table_cols else 'text',
+                                'format': {'specifier': ',.2f'} if col in numeric_table_cols else {}
                             }
                             for col in table_df.columns
                         ],
