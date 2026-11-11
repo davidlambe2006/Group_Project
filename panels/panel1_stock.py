@@ -1,8 +1,5 @@
 #Panel 1: AI Stock Performance
 
-#Libraries for handling data and calculations
-from py_compile import main
-
 import pandas as pd
 import numpy as np
 
@@ -10,9 +7,8 @@ import numpy as np
 import yfinance as yf
 
 #Libraries for the dashboard and interactive graphs
-import streamlit as st
+from dash import Dash, dcc, html, Input, Output
 import plotly.graph_objects as go
-
 #Python tools for handling dates
 from datetime import date, timedelta
 
@@ -69,6 +65,21 @@ STOCK_COLOURS = [
     "#83BBE9",  # Light blue
     "#FFFFFF",  # White
     "#A8B9CF"   # Grey
+]
+CARD_BLUE = "#102A45"
+TEXT_MUTED = "#A8B9CF"
+
+PERIOD_OPTIONS = [
+    "1 Year",
+    "3 Years",
+    "5 Years",
+    "10 Years"
+]
+
+DETAIL_OPTIONS = [
+    "Daily",
+    "Every 5 Days",
+    "Every 20 Days"
 ]
 
 # Downloading Stock Data with yfinance
@@ -391,141 +402,193 @@ def build_chart_3d(indexed_prices):
     return fig
 
 
+# DASH DASHBOARD AND INTERACTIVE CONTROLS
+
+def create_panel1_layout():
+
+    return html.Div([
+
+        # Dashboard heading
+        html.H2("Panel 1 — AI Stock Performance (3D)"),
+
+        html.P(
+            "How have AI-related companies performed "
+            "relative to the wider stock market?"
+        ),
+
+        # AI company selector
+        html.Label("AI Companies"),
+
+        dcc.Dropdown(
+            id="panel1_companies",
+            options=[
+                {"label": name, "value": ticker}
+                for ticker, name in COMPANIES.items()
+            ],
+            value=DEFAULT_COMPANIES,
+            multi=True
+        ),
+
+        # Three dashboard controls
+        html.Div([
+
+            html.Div([
+                html.Label("Historical Period"),
+
+                dcc.Dropdown(
+                    id="panel1_period",
+                    options=[
+                        "1 Year", "3 Years",
+                        "5 Years", "10 Years"
+                    ],
+                    value="3 Years",
+                    clearable=False
+                )
+            ], style={"flex": "1", "minWidth": "200px"}),
+
+            html.Div([
+                html.Label("Market Benchmarks"),
+
+                dcc.Dropdown(
+                    id="panel1_benchmarks",
+                    options=[
+                        {"label": name, "value": ticker}
+                        for ticker, name in BENCHMARKS.items()
+                    ],
+                    value=["SPY", "QQQ"],
+                    multi=True
+                )
+            ], style={"flex": "1", "minWidth": "200px"}),
+
+            html.Div([
+                html.Label("Chart Detail"),
+
+                dcc.Dropdown(
+                    id="panel1_detail",
+                    options=[
+                        "Daily",
+                        "Every 5 Days",
+                        "Every 20 Days"
+                    ],
+                    value="Every 5 Days",
+                    clearable=False
+                )
+            ], style={"flex": "1", "minWidth": "200px"})
+
+        ], style={
+            "display": "flex",
+            "flexWrap": "wrap",
+            "gap": "20px",
+            "marginTop": "20px",
+            "marginBottom": "25px"
+        }),
+
+        # Chart and statistics will appear here
+        dcc.Loading(
+            html.Div(id="panel1_results"),
+            type="circle"
+        )
+
+    ], style={
+        "backgroundColor": DARK_BLUE,
+        "color": "white",
+        "padding": "30px",
+        "minHeight": "100vh",
+        "fontFamily": "Arial"
+    })
 
 
-# STREAMLIT DASHBOARD AND INTERACTIVE CONTROLS
+# CREATE DASH APPLICATION
 
-def render_panel1(selected_companies):
-    """
-    Display the interactive AI Stock Performance dashboard.
+app = Dash(__name__, title="AI Boom Dashboard")
 
-    Parameters
-    ----------
-    selected_companies : list
-        Stock ticker symbols selected by the user.
-        The list will eventually come from the group's
-        global company selector in app.py.
+app.layout = create_panel1_layout()
 
-    Returns
-    -------
-        Displays an interactive 3D chart and a table
-        containing historical financial statistics.
 
-    Notes
-    -----
-    The selected companies are compared using adjusted
-    closing prices indexed to a common starting value of 100.
-    """
+# DASH CALLBACK
 
-    # Display the panel heading and research question.
-    st.subheader("Panel 1 — AI Stock Performance (3D)")
+@app.callback(
+    Output("panel1_results", "children"),
+    Input("panel1_companies", "value"),
+    Input("panel1_period", "value"),
+    Input("panel1_benchmarks", "value"),
+    Input("panel1_detail", "value")
+)
+def update_panel1(
+    selected_companies,
+    period,
+    selected_benchmarks,
+    detail
+):
 
-    st.write(
-        "How have AI-related companies performed "
-        "relative to the wider stock market?"
-    )
-
-    # Check whether the user has selected any companies.
+    # Check selected companies
     if not selected_companies:
-        st.warning("Please select at least one AI company.")
-        return
+        return html.P("Please select at least one AI company.")
 
-    # Create three columns for the dashboard controls.
-    col1, col2, col3 = st.columns(3)
+    selected_benchmarks = selected_benchmarks or []
 
-    # Control 1: Historical comparison period.
-    with col1:
-        period = st.selectbox(
-            "Historical Period",
-            ["1 Year", "3 Years", "5 Years", "10 Years"],
-            index=1,
-            key="panel1_period"
-        )
-
-    # Control 2: Choose market benchmarks.
-    with col2:
-        selected_benchmarks = st.multiselect(
-            "Market Benchmarks",
-            options=list(BENCHMARKS.keys()),
-            default=["SPY", "QQQ"],
-            key="panel1_benchmarks"
-        )
-
-    # Control 3: Adjust the amount of chart detail.
-    with col3:
-        detail = st.selectbox(
-            "Chart Detail",
-            ["Daily", "Every 5 Days", "Every 20 Days"],
-            index=1,
-            key="panel1_detail"
-        )
-
-    # Combine the selected AI companies and benchmarks.
+    # Combine companies and benchmarks
     tickers = list(dict.fromkeys(
         selected_companies + selected_benchmarks
     ))
 
-    # Convert the chosen period into a number of years.
+    # Calculate historical period
     years = int(period.split()[0])
 
-    # Calculate the starting and ending dates.
     end_date = date.today() + timedelta(days=1)
 
     start_date = date.today() - timedelta(
         days=round(years * 365.25)
     )
 
-    # Download the historical stock prices.
+    # Download stock prices
     try:
-        with st.spinner("Downloading historical stock data..."):
-            prices = get_prices(
-                tickers,
-                start_date.isoformat(),
-                end_date.isoformat()
-            )
+        prices = get_prices(
+            tickers,
+            start_date.isoformat(),
+            end_date.isoformat()
+        )
 
     except Exception as error:
-        st.error("Unable to download historical stock data.")
-        st.caption(str(error))
-        return
+        return html.P(
+            f"Unable to download stock data: {error}"
+        )
 
-    # Check whether the download returned any information.
     if prices.empty:
-        st.error("No stock data was returned.")
-        return
+        return html.P("No stock data was returned.")
 
-    # Check for companies with completely missing prices.
+    # Identify missing prices
     missing = [
         ticker for ticker in tickers
         if ticker not in prices.columns
         or prices[ticker].isna().all()
     ]
 
-    if missing:
-        st.warning(
-            "Data unavailable for: " + ", ".join(missing)
+    prices = prices.drop(
+        columns=missing,
+        errors="ignore"
+    )
+
+    if not any(
+        ticker in prices.columns
+        for ticker in selected_companies
+    ):
+        return html.P(
+            "No selected AI companies have available data."
         )
 
-    # Remove tickers that have no historical prices.
-    prices = prices.drop(columns=missing, errors="ignore")
-
-    # Ensure at least one AI company still has valid data.
-    if not any(ticker in prices.columns
-               for ticker in selected_companies):
-        st.warning("No selected AI companies have available data.")
-        return
-
-    # Index stock prices to a common starting value of 100.
+    # Normalise prices
     indexed_prices = index_and_normalise(prices)
 
     if len(indexed_prices) < 3:
-        st.warning("Not enough shared historical data to compare.")
-        return
+        return html.P(
+            "Not enough shared historical data to compare."
+        )
 
-    # Calculate statistics using the full historical dataset.
+    # Calculate performance statistics
     statistics = calculate_statistics(indexed_prices)
 
-    # Reduce chart points to improve 3D performance.
+    # Select chart detail
     if detail == "Daily":
         step = 1
     elif detail == "Every 5 Days":
@@ -535,124 +598,139 @@ def render_panel1(selected_companies):
 
     chart_prices = indexed_prices.iloc[::step].copy()
 
-    # Include the latest observation if sampling skipped it.
+    # Include the latest observation
     if chart_prices.index[-1] != indexed_prices.index[-1]:
         chart_prices = pd.concat([
             chart_prices,
             indexed_prices.iloc[[-1]]
         ])
 
+    # LEFT COLUMN: 3D stock performance graph
 
-    # Create two columns: 75% for chart, 25% for statistics.
-    chart_col, stats_col = st.columns([3, 1], gap="medium")
+    figure = build_chart_3d(chart_prices)
 
-    # LEFT COLUMN: Interactive 3D stock performance graph.
-    with chart_col:
-        figure = build_chart_3d(chart_prices)
+    chart_col = html.Div(
+        dcc.Graph(
+            id="panel1_3d_chart",
+            figure=figure,
+            responsive=True,
+            style={
+                "width": "100%",
+                "height": "560px"
+            }
+        ),
+        style={
+            "flex": "3",
+            "minWidth": "0"
+        }
+    )
 
-        st.plotly_chart(
-            figure,
-            use_container_width=True,
-            key="panel1_3d_chart"
+    # RIGHT COLUMN: Performance statistics
+
+    cards = []
+
+    for number, ticker in enumerate(indexed_prices.columns):
+
+        colour = STOCK_COLOURS[
+            number % len(STOCK_COLOURS)
+        ]
+
+        total_return = statistics.loc[
+            ticker, "Total Return (%)"
+        ]
+
+        company_name = COMPANIES.get(
+            ticker, BENCHMARKS.get(ticker, ticker)
         )
 
-   
-    # RIGHT COLUMN: Colour-coded performance statistics.
-    with stats_col:
+        # Create performance card
+        card = html.Div([
 
-        st.markdown("#### Total Return")
+            html.Span(
+                f"{company_name} ({ticker})",
+                style={
+                    "color": "white",
+                    "fontSize": "13px"
+                }
+            ),
 
-        # Display a performance card for each company.
-        for number, ticker in enumerate(indexed_prices.columns):
-
-            # Match the company colour to its line on the graph.
-            colour = STOCK_COLOURS[
-                number % len(STOCK_COLOURS)
-            ]
-
-            # Retrieve the company's calculated total return.
-            total_return = statistics.loc[
-                ticker, "Total Return (%)"
-            ]
-
-            # Retrieve the full company name.
-            company_name = COMPANIES.get(
-                ticker, BENCHMARKS.get(ticker, ticker)
+            html.Span(
+                f"{total_return:+,.1f}%",
+                style={
+                    "color": colour,
+                    "fontWeight": "bold",
+                    "fontSize": "15px"
+                }
             )
 
-            # Create a compact financial performance card.
-            card_html = f"""
-            <div style="
-                background-color: #102A45;
-                border-left: 4px solid {colour};
-                border-radius: 7px;
-                padding: 12px;
-                margin-bottom: 8px;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                gap: 10px;
-            ">
-                <span style="color: white; font-size: 13px;">
-                    {company_name} ({ticker})
-                </span>
-                <span style="
-                    color: {colour};
-                    font-weight: bold;
-                    font-size: 15px;
-                    white-space: nowrap;
-                ">
-                    {total_return:+,.1f}%
-                </span>
-            </div>
-            """
+        ], style={
+            "backgroundColor": "#102A45",
+            "borderLeft": f"4px solid {colour}",
+            "borderRadius": "7px",
+            "padding": "12px",
+            "marginBottom": "8px",
+            "display": "flex",
+            "justifyContent": "space-between",
+            "alignItems": "center",
+            "gap": "10px"
+        })
 
-            st.html(card_html)
+        cards.append(card)
 
+    stats_col = html.Div([
 
-    # Explain the source and methodology.
-    st.caption(
+        html.H4("Total Return"),
+
+        *cards
+
+    ], style={
+        "flex": "1",
+        "minWidth": "250px"
+    })
+
+    # Combine chart and statistics columns
+
+    result = html.Div(
+        [chart_col, stats_col],
+        style={
+            "display": "flex",
+            "flexWrap": "wrap",
+            "gap": "24px"
+        }
+    )
+
+    # Data source information
+    caption = html.P(
         f"Source: Yahoo Finance via yfinance | "
         f"Actual comparison period: "
         f"{indexed_prices.index[0]:%d %b %Y} to "
         f"{indexed_prices.index[-1]:%d %b %Y} | "
-        "Prices adjusted for stock splits and dividends."
-    )
-
-
-
-
-def main():
-    """
-    Run Panel 1 independently with six default AI companies.
-
-    Configure the dashboard's appearance and width.
-    """
-
-    # Set the dashboard to use the full browser width.
-    st.set_page_config(
-        page_title="AI Boom Dashboard",
-        layout="wide",
-        initial_sidebar_state="collapsed"
-    )
-
-    # Increase the maximum width of the dashboard.
-    st.markdown(
-        """
-        <style>
-        .block-container {
-            max-width: 1700px;
-            padding-left: 1.5rem;
-            padding-right: 1.5rem;
+        "Prices adjusted for stock splits and dividends.",
+        style={
+            "color": "#A8B9CF",
+            "fontSize": "12px",
+            "marginTop": "20px"
         }
-        </style>
-        """,
-        unsafe_allow_html=True
     )
 
-    # Display Panel 1 using the six default companies.
-    render_panel1(DEFAULT_COMPANIES)
+    output = []
 
+    if missing:
+        output.append(
+            html.P(
+                "Data unavailable for: " + ", ".join(missing),
+                style={"color": "#FBC56C"}
+            )
+        )
+
+    output.extend([result, caption])
+
+    return html.Div(output)
+
+
+# RUN DASH APPLICATION
 
 if __name__ == "__main__":
-    main()
+    app.run(debug=True)
+
+
