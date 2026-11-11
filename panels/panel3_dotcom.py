@@ -1,282 +1,780 @@
+﻿
+import numpy as np
 import pandas as pd
 import yfinance as yf
+import plotly.graph_objects as go
 
-# Function to calculate a portfolio from selected companies
-def calculate_ai_portfolio(selected_companies, start_date):
+from functools import lru_cache
+from pathlib import Path
+from dash import Dash, dcc, html, Input, Output, ctx
 
-    prices = yf.download(
-        selected_companies,
-        start=start_date,
-        auto_adjust=True,
-        progress=False
-    )["Close"]
 
-    # Ensure prices are stored as a DataFrame
+# All 12 companies, selected by default
+DEFAULT_AI_COMPANIES = [
+    "NVDA", "MSFT", "GOOGL", "AMZN",
+    "META", "AVGO", "AMD", "TSM",
+    "ORCL", "PLTR", "CRM", "ASML"
+]
+
+# Chart colours
+NAVY = "#0B1220"
+BLUE = "#38BDF8"
+CYAN = "#00E5A8"
+GREEN = "#4ADE80"
+PURPLE = "#C4B5FD"
+PINK = "#FB7185"
+
+
+# ---------------------------------------
+# 1. DOWNLOAD DATA
+# ---------------------------------------
+
+@lru_cache(maxsize=1)
+def trading_session_closes(session_date):
+    # The date is the cache key: refresh the schedule on each New York day.
+    # Yahoo's schedule includes holidays and early closing times.
+    try:
+        metadata = yf.Ticker("^IXIC").get_history_metadata()
+        schedule = metadata["tradingPeriods"]
+        closes = pd.DatetimeIndex(pd.to_datetime(schedule["end"], utc=True))
+        if closes.empty or closes.isna().any():
+            raise ValueError("Missing session closing times.")
+        return closes
+    except Exception as error:
+        raise ValueError(
+            "Unable to check completed trading sessions. Please try again shortly."
+        ) from error
+
+
+@lru_cache(maxsize=32)
+def download_prices(tickers, start, end=None):
+    try:
+        data = yf.download(
+            list(tickers),
+            start=start,
+            end=end,
+            auto_adjust=True,
+            progress=False
+        )
+        if data is None or data.empty:
+            raise ValueError("No prices returned.")
+        prices = data["Close"].copy()
+    except Exception as error:
+        raise ValueError(
+            "Yahoo Finance prices are unavailable. Please try again shortly."
+        ) from error
+
     if isinstance(prices, pd.Series):
-        prices = prices.to_frame()
+        prices = prices.to_frame(name=tickers[0])
 
-    # Remove dates where any selected company has no price
-    prices = prices.dropna()
+    # Ensure consistent column names
+    prices.columns = [
+        str(col).upper() for col in prices.columns
+    ]
+
+    missing = set(tickers) - set(prices.columns)
+    if missing:
+        raise ValueError(f"Missing price data for: {', '.join(sorted(missing))}.")
+
+    if not isinstance(prices.index, pd.DatetimeIndex) or prices.index.hasnans:
+        raise ValueError("Yahoo Finance returned invalid price dates. Please retry.")
+
+    prices.index = prices.index.tz_localize(None)
+    prices = prices.sort_index().apply(pd.to_numeric, errors="coerce")
+    # Enforce the requested range; Yahoo's end date is exclusive.
+    prices = prices.loc[prices.index >= pd.Timestamp(start)]
+    if end is not None:
+        prices = prices.loc[prices.index < pd.Timestamp(end)]
+
+    if prices.index.has_duplicates or ((prices <= 0) | np.isinf(prices)).any().any():
+        raise ValueError("Yahoo Finance returned invalid prices. Please retry.")
+
+    unavailable = [ticker for ticker in tickers if prices[ticker].dropna().empty]
+    if unavailable:
+        raise ValueError(f"No valid price data for: {', '.join(unavailable)}. Please retry.")
+
+    # Failed downloads raise above, so they are not retained in the price cache.
+    return prices.dropna(how="all")
+
+
+# ---------------------------------------
+# 2. CALCULATE PORTFOLIOS
+# ---------------------------------------
+
+def calculate_ai_portfolio(selected_companies, start_date="2023-01-01"):
+
+    selected = list(dict.fromkeys(selected_companies))
+
+    if not selected:
+        raise ValueError("Select at least one AI company.")
+
+    invalid = set(selected) - set(DEFAULT_AI_COMPANIES)
+
+    if invalid:
+        raise ValueError(f"Unknown companies: {invalid}")
+
+    now = pd.Timestamp.now(tz="America/New_York")
+    closes = trading_session_closes(now.strftime("%Y-%m-%d"))
+    completed = closes[closes <= now]
+    if completed.empty:
+        raise ValueError("No completed trading session is available. Please retry shortly.")
+    # Including only dates before the following day excludes unfinished sessions.
+    end_date = (
+        completed.max().tz_convert("America/New_York").normalize()
+        + pd.DateOffset(days=1)
+    ).strftime("%Y-%m-%d")
+    prices = download_prices(
+        tuple(sorted(selected)), start_date, end_date
+    )
+
+    # All selected stocks must have a valid price
+    prices = prices[selected].dropna()
 
     if prices.empty:
-        raise ValueError("No overlapping stock prices available.")
+        raise ValueError("No overlapping price data available.")
 
-    # Index each company to 100
-    indexed_prices = prices.div(prices.iloc[0]) * 100
+    # Index every stock to 100
+    indexed = prices.div(prices.iloc[0]) * 100
 
-    # Calculate the equally weighted portfolio
-    portfolio = indexed_prices.mean(axis=1)
+    # Equal initial investment in every stock
+    # Weights drift naturally as prices change
+    portfolio = indexed.mean(axis=1)
 
     return portfolio
 
-# Download historical NASDAQ Composite prices
-nasdaq = yf.download(
-    "^IXIC",
-    start="1995-01-01",
-    end="2004-01-01",
-    auto_adjust=False
-)
 
-# Check the first five rows
-print(nasdaq.head())
+@lru_cache(maxsize=1)
+def calculate_nasdaq():
 
-# Select the NASDAQ closing prices
-nasdaq_close = nasdaq["Close"]["^IXIC"]
-
-# Convert prices into an index starting at 100
-nasdaq_indexed = nasdaq_close / nasdaq_close.iloc[0] * 100
-# Calculate historical NASDAQ maximum drawdown
-nasdaq_running_peak = nasdaq_indexed.cummax()
-
-nasdaq_drawdown = (nasdaq_indexed / nasdaq_running_peak - 1) * 100
-
-nasdaq_max_drawdown = nasdaq_drawdown.min()
-# Calculate NASDAQ cumulative return
-nasdaq_cumulative_return = (
-    nasdaq_indexed.iloc[-1] / nasdaq_indexed.iloc[0] - 1
-) * 100
-
-print(f"NASDAQ Cumulative Return: {nasdaq_cumulative_return:.2f}%")
-
-print(f"NASDAQ Maximum Drawdown: {nasdaq_max_drawdown:.2f}%")
-# Check the first five indexed values
-print(nasdaq_indexed.head())
-# Find the highest NASDAQ value during the bubble
-peak_value = nasdaq_indexed.max()
-peak_date = nasdaq_indexed.idxmax()
-
-# Find the lowest value AFTER the peak
-after_peak = nasdaq_indexed.loc[peak_date:]
-crash_value = after_peak.min()
-crash_date = after_peak.idxmin()
-
-# Calculate the percentage decline
-crash_percent = (crash_value / peak_value - 1) * 100
-
-# Display the results
-print("Bubble peak:", peak_date.date(), round(peak_value, 2))
-print("Crash bottom:", crash_date.date(), round(crash_value, 2))
-print("NASDAQ decline:", round(crash_percent, 2), "%")
-
-import plotly.graph_objects as go
-
-# Create an interactive NASDAQ chart
-fig = go.Figure()
-
-fig.add_trace(go.Scatter(
-    x=nasdaq_indexed.index,
-    y=nasdaq_indexed,
-    mode="lines",
-    name="NASDAQ Composite",
-    line=dict(color="#00BFFF", width=2)
-))
-# Mark the highest point of the Dot-Com Bubble
-fig.add_trace(go.Scatter(
-    x=[peak_date],
-    y=[peak_value],
-    mode="markers+text",
-    name="Bubble Peak",
-    marker=dict(color="orange", size=12),
-    text=["Bubble Peak"],
-    textposition="top center"
-))
-
-# Mark the lowest point after the crash
-fig.add_trace(go.Scatter(
-    x=[crash_date],
-    y=[crash_value],
-    mode="markers+text",
-    name="Crash Bottom",
-    marker=dict(color="red", size=12),
-    text=["Crash Bottom"],
-    textposition="bottom center"
-))
-
-# Highlight the Dot-Com crash period
-fig.add_vrect(
-    x0=peak_date,
-    x1=crash_date,
-    fillcolor="red",
-    opacity=0.05,
-    layer="below",
-    line_width=0
-)
-
-# Show the percentage decline during the crash
-fig.add_annotation(
-    x=crash_date,
-    y=peak_value * 0.75,
-    text=f"NASDAQ Crash: {crash_percent:.1f}%",
-    showarrow=False,
-    font=dict(size=14, color="white"),
-    bgcolor="rgba(180, 30, 30, 0.8)",
-    borderpad=6
-)
-# Add chart titles and styling
-fig.update_layout(
-    title="The Dot-Com Bubble (1995–2003)",
-    xaxis_title="Year",
-    yaxis_title="NASDAQ Index (1995 = 100)",
-    template="plotly_dark",
-    hovermode="x unified"
-)
-
-# Open the interactive graph
-#fig.show()
-
-def render_panel3(selected_companies):
-
-    ai_start_date = "2024-01-01"
-
-    ai_prices = yf.download(
-        selected_companies,
-        start=ai_start_date,
-        auto_adjust=True,
-        progress=False
-    )["Close"]
-
-    print("\nModern AI stock prices:")
-    print(ai_prices.head())
-
-    # Keep only dates where ALL selected companies have prices
-    ai_prices = ai_prices.dropna()
-
-    # Check that valid prices remain
-    if ai_prices.empty:
-        raise ValueError("No overlapping stock prices available.")
-
-    ai_portfolio = calculate_ai_portfolio(
-        selected_companies,
-        "2023-01-01"
+    prices = download_prices(
+        ("^IXIC",), "1995-01-01", "2004-01-01"
     )
 
-    # Calculate cumulative return
-    ai_cumulative_return = (ai_portfolio.iloc[-1] / ai_portfolio.iloc[0] - 1) * 100
+    close = prices["^IXIC"]
 
-    print(f"AI Portfolio Cumulative Return: {ai_cumulative_return:.2f}%")
-
-    # Calculate maximum drawdown of AI portfolio
-
-    # Highest portfolio value reached up to each date
-    ai_running_peak = ai_portfolio.cummax()
-
-    # Percentage fall from the previous peak
-    ai_drawdown = (ai_portfolio / ai_running_peak - 1) * 100
-
-    # Largest percentage fall
-    ai_max_drawdown = ai_drawdown.min()
-
-    print(f"AI Portfolio Maximum Drawdown: {ai_max_drawdown:.2f}%")
-
-    # Display the first five portfolio values
-    print("\nAI Portfolio:")
-    print(ai_portfolio.head())
+    return close / close.iloc[0] * 100
 
 
-    # Convert daily data into monthly data
-    nasdaq_monthly = nasdaq_indexed.resample("MS").first()
-    ai_monthly = ai_portfolio.resample("MS").first()
+def calculate_metrics(series):
 
-    # Check the results
-    print("\nMonthly NASDAQ:")
-    print(nasdaq_monthly.head())
+    cumulative_return = (
+        series.iloc[-1] / series.iloc[0] - 1
+    ) * 100
 
-    print("\nMonthly AI Portfolio:")
-    print(ai_monthly.head())
+    running_peak = series.cummax()
 
+    drawdown = (
+        series / running_peak - 1
+    ) * 100
 
-    # Create month numbers for each period
-    nasdaq_month_numbers = list(range(len(nasdaq_monthly)))
-    ai_month_numbers = list(range(len(ai_monthly)))
-
-    # Check the results
-    print("\nNASDAQ month numbers:")
-    print(nasdaq_month_numbers[:5])
-
-    print("\nAI month numbers:")
-    print(ai_month_numbers[:5])
+    return cumulative_return, drawdown.min()
 
 
-    # Create the comparison chart
-    comparison_fig = go.Figure()
+# ---------------------------------------
+# 3. ILLUSTRATIVE FORECASTS
+# ---------------------------------------
 
-    # Historical dot-com bubble
-    comparison_fig.add_trace(go.Scatter(
-    x=nasdaq_month_numbers,
-    y=nasdaq_monthly,
-    mode="lines",
-    name="Dot-Com Bubble (1995)",
-    line=dict(color="#00BFFF", width=3)
-))
+def create_forecast(start_value, target_return, months=24):
+
+    t = np.arange(months + 1)
+
+    # Smooth progression to the exact target
+    target_value = start_value * (1 + target_return)
+
+    trend = np.log(target_value / start_value) * t / months
+
+    # Small deterministic fluctuations
+    # Zero at both endpoints
+    fluctuation = (
+        0.035
+        * np.sin(np.pi * t / months)
+        * np.sin(2 * np.pi * t / 7)
+    )
+    values = start_value * np.exp(trend + fluctuation)
+
+    values[0] = start_value
+    values[-1] = target_value
+
+    return values
+
+
+# ---------------------------------------
+# 4. BUILD THE PLOTLY GRAPH
+# ---------------------------------------
+
+def monthly_with_latest(series):
+    monthly = series.resample("MS").first().dropna()
+    # Keep monthly samples, adding the actual latest observation only if new.
+    latest_date = series.index[-1]
+    first_in_last_month = series.loc[series.index >= monthly.index[-1]].index[0]
+    if latest_date > first_in_last_month:
+        monthly.loc[latest_date] = series.iloc[-1]
+
+    # Whole calendar months for existing samples; a fraction for the daily end.
+    x = (
+        (monthly.index.year - series.index[0].year) * 12
+        + monthly.index.month - series.index[0].month
+        + (monthly.index.day - 1) / monthly.index.days_in_month
+    ).to_numpy(dtype=float, copy=True)
+    # If the final month has just one observation, position that point by its
+    # actual date rather than adding the same observation a second time.
+    if latest_date == first_in_last_month and len(monthly) > 1:
+        x[-1] += (latest_date.day - 1) / latest_date.days_in_month
+    return monthly, x
+
+
+def render_panel3(selected_companies=None):
+
+    if selected_companies is None:
+        selected_companies = DEFAULT_AI_COMPANIES
+
+    nasdaq = calculate_nasdaq()
+
+    ai = calculate_ai_portfolio(selected_companies)
+
+    nasdaq_return, nasdaq_dd = calculate_metrics(nasdaq)
+    ai_return, ai_dd = calculate_metrics(ai)
+
+    # Monthly observations
+    nasdaq_monthly, nasdaq_x = monthly_with_latest(nasdaq)
+    ai_monthly, ai_x = monthly_with_latest(ai)
+
+    # Rebase displayed monthly series to 100
+    nasdaq_monthly = (
+        nasdaq_monthly / nasdaq_monthly.iloc[0] * 100
+    )
+    ai_monthly = (
+        ai_monthly / ai_monthly.iloc[0] * 100
+    )
+
+    # Preserve the exact daily endpoints, avoiding rebasing round-off differences.
+    nasdaq_monthly.iloc[-1] = nasdaq.iloc[-1]
+    ai_monthly.iloc[-1] = ai.iloc[-1]
+
+    fig = go.Figure()
+
+    # Historical NASDAQ
+    fig.add_trace(go.Scatter(
+        x=nasdaq_x,
+        y=nasdaq_monthly,
+        mode="lines",
+        name="Dot-Com Era · NASDAQ",
+        line=dict(color=BLUE, width=3.5),
+        customdata=nasdaq_monthly.to_numpy() - 100,
+        hovertemplate=(
+            "<b>Dot-Com Era · NASDAQ</b><br>"
+            "Month: %{x}<br>"
+            "Index (base 100): %{y:.2f}<br>"
+            "Return since start: %{customdata:+.2f}%"
+            "<extra></extra>"
+        )
+    ))
 
     # Modern AI portfolio
-    comparison_fig.add_trace(go.Scatter(
-    x=ai_month_numbers,
-    y=ai_monthly,
-    mode="lines",
-    name="Modern AI Boom (2023)",
-    line=dict(color="#00FF99", width=3)
-))
+    fig.add_trace(go.Scatter(
+        x=ai_x,
+        y=ai_monthly,
+        mode="lines",
+        name="Modern AI · Portfolio",
+        line=dict(color=CYAN, width=3.5),
+        customdata=ai_monthly.to_numpy() - 100,
+        hovertemplate=(
+            "<b>Modern AI Portfolio</b><br>"
+            "Month: %{x}<br>"
+            "Index (base 100): %{y:.2f}<br>"
+            "Return since start: %{customdata:+.2f}%"
+            "<extra></extra>"
 
-    print("DEBUG AI cumulative return:", ai_cumulative_return)
-    print("DEBUG AI portfolio first value:", ai_portfolio.iloc[0])
-    print("DEBUG AI portfolio last value:", ai_portfolio.iloc[-1])
-    # Style the comparison chart
-    comparison_fig.update_layout(
-    
-    title=(
-        "AI Boom vs Dot-Com Bubble"
-        "<br><sup>"
-        f"Dot-Com Return: {nasdaq_cumulative_return:+.2f}%"
-        f" | Max Drawdown: {nasdaq_max_drawdown:.2f}%"
-        "<br>"
-        f"AI Portfolio Return: {ai_cumulative_return:+.2f}%"
-        f" | Max Drawdown: {ai_max_drawdown:.2f}%"
-        "</sup>"
-    ),
+        )
+    ))
 
-    xaxis_title="Months Since Start",
-    yaxis_title="Indexed Performance (Start = 100)",
-    template="plotly_dark",
-    hovermode="x unified",
+    # -----------------------------------
+    # 5. ADD THE THREE FORECASTS
+    # -----------------------------------
 
-    hoverlabel=dict(
-        bgcolor="#1E293B",
-        font_size=13,
-        font_family="Arial"
+    last_month = float(ai_x[-1])
+    last_value = float(ai_monthly.iloc[-1])
+
+    forecast_x = last_month + np.arange(25)
+
+    # Estimate volatility from completed month ends, excluding the partial month.
+    month_ends = ai.resample("ME").last().dropna()
+    current_month = (
+        pd.Timestamp.now(tz="America/New_York")
+        .tz_localize(None).normalize().replace(day=1)
     )
-)
+    month_ends = month_ends.loc[month_ends.index < current_month]
+    monthly_log_returns = np.log(month_ends / month_ends.shift(1)).dropna()
+    if len(monthly_log_returns) < 2:
+        raise ValueError(
+            "At least three completed month-end observations are needed "
+            "for the volatility-based scenarios."
+        )
 
-# Improve the hover information
-    comparison_fig.update_traces(
-    hovertemplate="Indexed Value: %{y:.2f}<extra>%{fullData.name}</extra>"
-)
+    sigma = float(monthly_log_returns.std(ddof=1))
+    months = 24
+    z = 1.645
+    spread = z * sigma * np.sqrt(months)
+    # Base is assumed; historical volatility determines the Bull/Bear dispersion.
+    scenarios = [
+        ("Bull", 1.166 * np.exp(spread) - 1, GREEN),
+        ("Base", 0.166, PURPLE),
+        ("Bear", 1.166 * np.exp(-spread) - 1, PINK)
+    ]
+
+    for name, target_return, colour in scenarios:
+
+        forecast_y = create_forecast(
+            last_value, target_return
+        )
+
+        fig.add_trace(go.Scatter(
+            x=forecast_x,
+            y=forecast_y,
+            mode="lines",
+            name=f"{name} Scenario",
+            line=dict(
+                color=colour,
+                width=2.5,
+                dash="dash"
+            ),
+            customdata=np.column_stack((
+                np.arange(25),
+                (forecast_y / last_value - 1) * 100
+            )),
+            hovertemplate=(
+                f"<b>{name} Scenario · Illustrative</b><br>"
+                "Forecast month: %{customdata[0]:.0f} of 24<br>"
+                "Projected index: %{y:.2f}<br>"
+                "Return from forecast start: %{customdata[1]:+.2f}%<br>"
+                f"24-month target: {target_return:+.1%}"
+                "<extra></extra>"
+            )
+        ))
+
+        fig.add_annotation(
+            x=forecast_x[-1],
+            y=forecast_y[-1],
+            text=f"<b>{name} {target_return:+.1%}</b>",
+            # Keep labels separate from the data: no coloured connector lines.
+            showarrow=False,
+            xanchor="left",
+            xshift=10,
+            yshift={"Bull": 18, "Base": 0, "Bear": -18}[name],
+            bgcolor=NAVY,
+            borderpad=5,
+            font=dict(size=13, color=colour)
+        )
+
+    # Subtle forecast boundary
+    fig.add_vline(
+        x=last_month,
+        line_color="rgba(203,213,225,0.35)",
+        line_width=1,
+        line_dash="dot"
+    )
+    fig.add_annotation(
+        x=last_month, y=0, yref="paper", yshift=12,
+        text="Forecast starts", showarrow=False,
+        font=dict(size=11, color="#CBD5E1"), bgcolor=NAVY
+    )
+
+    # -----------------------------------
+    # 6. PROFESSIONAL CHART STYLING
+    # -----------------------------------
+
+    fig.update_layout(
+        paper_bgcolor=NAVY,
+        plot_bgcolor=NAVY,
+        font=dict(
+            family="Inter, Segoe UI, Arial, sans-serif",
+            color="#CBD5E1",
+            size=13
+        ),
+
+        xaxis_title="Months Since Start",
+        yaxis_title="Indexed Performance · Base 100",
+
+        hovermode="closest",
+
+        hoverlabel=dict(
+            bgcolor="#172338",
+            bordercolor="#334155",
+            font=dict(
+                color="#F8FAFC",
+                size=13
+            )
+        ),
+
+        
+            legend=dict(
+              orientation="h",
+              yanchor="bottom",
+              y=1.02,
+              xanchor="left",
+              x=0,
+              font=dict(size=15, color="#F1F5F9"),
+              itemsizing="constant",
+              itemwidth=40,
+            tracegroupgap=0
+),
 
 
-    # Open the comparison graph
-    comparison_fig.show()
+        margin=dict(
+            l=60,
+            r=115,
+            t=65,
+            b=65
+        ),
+
+        height=740,
+        autosize=True,
+
+        hoverdistance=30
+    )
+
+    fig.update_xaxes(
+        showgrid=True,
+        gridcolor="rgba(148,163,184,0.07)",
+        automargin=True,
+        title_standoff=18,
+        tickfont=dict(size=12, color="#CBD5E1"),
+        zeroline=False,
+        showline=False
+    )
+
+    fig.update_yaxes(
+        showgrid=True,
+        gridcolor="rgba(148,163,184,0.07)",
+        automargin=True,
+        title_standoff=18,
+        tickfont=dict(size=12, color="#CBD5E1"),
+        zeroline=False,
+        showline=False
+    )
+
+    # Store metrics for the Dash header
+    fig.update_layout(meta={
+        "nasdaq_return": float(nasdaq_return),
+        "nasdaq_dd": float(nasdaq_dd),
+        "ai_return": float(ai_return),
+        "ai_dd": float(ai_dd),
+        "company_count": len(selected_companies)
+    })
+
+    return fig
 
 
+# ---------------------------------------
+# 7. DASH HEADER AND METRICS
+# ---------------------------------------
+
+def nasdaq_crash_detail():
+    # Identify the daily peak and trough behind the historical drawdown KPI.
+    nasdaq = calculate_nasdaq()
+    drawdown = nasdaq / nasdaq.cummax() - 1
+    trough_date = drawdown.idxmin()
+    peak_date = nasdaq.loc[:trough_date].idxmax()
+    crash = nasdaq.loc[peak_date:trough_date]
+
+    detail = go.Figure(go.Scatter(
+        x=crash.index, y=crash, mode="lines",
+        line=dict(color=BLUE, width=2.5),
+        customdata=(crash / crash.iloc[0] - 1) * 100,
+        hovertemplate=(
+            "<b>NASDAQ · Historical crash</b><br>"
+            "%{x|%d %b %Y}<br>Index (base 100): %{y:.2f}<br>"
+            "Return from peak: %{customdata:+.2f}%<extra></extra>"
+        )
+    ))
+    for label, date, anchor in [
+        ("Peak", peak_date, "left"),
+        ("Trough", trough_date, "right")
+    ]:
+        detail.add_annotation(
+            x=date, y=float(nasdaq.loc[date]),
+            text=f"<b>{label}</b> · {date:%d %b %Y}",
+            showarrow=False, xanchor=anchor, yanchor="bottom", yshift=8,
+            font=dict(size=12, color="#E2E8F0"), bgcolor=NAVY, borderpad=3
+        )
+
+    detail.add_annotation(
+        x=0.96, y=0.85, xref="paper", yref="paper",
+        text=f"<b>−{abs(drawdown.min()):.1%} Peak-to-Trough</b>",
+        showarrow=False, xanchor="right", yanchor="top",
+        font=dict(size=17, color=PINK), bgcolor=NAVY, borderpad=5
+    )
+
+    # A separate, explicitly labelled zoom leaves the main graph's scale intact.
+    padding = float(crash.max() - crash.min()) * 0.15
+    detail.update_layout(
+        title=dict(
+            text=f"NASDAQ crash detail · Peak-to-trough drawdown {drawdown.min():.1%}",
+            font=dict(size=14), x=0.02
+        ),
+        paper_bgcolor=NAVY, plot_bgcolor=NAVY,
+        font=dict(family="Inter, Segoe UI, Arial, sans-serif", color="#CBD5E1", size=12),
+        height=350, margin=dict(l=60, r=30, t=65, b=45), showlegend=False,
+        hoverlabel=dict(bgcolor="#172338", bordercolor="#334155", font_color="#F8FAFC")
+    )
+    detail.update_xaxes(
+        tickformat="%b %Y", nticks=6, showgrid=False, zeroline=False
+    )
+    detail.update_yaxes(
+        title="NASDAQ index · Base 100", automargin=True,
+        range=[float(crash.min()) - padding, float(crash.max()) + padding],
+        gridcolor="rgba(148,163,184,0.07)", zeroline=False
+    )
+    return detail
+
+
+def metric_card(label, value, colour):
+
+    return html.Div(
+        [
+            html.Div(
+                label,
+                style={
+                    "color": "#B7C5D8",
+                    "fontSize": "12px",
+                    "marginBottom": "12px",
+                    "letterSpacing": "0.7px",
+                    "lineHeight": "1.5"
+                }
+            ),
+            html.Div(
+                value,
+                style={
+                    "color": colour,
+                    "fontSize": "28px",
+                    "fontWeight": "600",
+                    "fontVariantNumeric": "tabular-nums"
+                }
+            )
+        ],
+        style={
+            "backgroundColor": "#131F31",
+            "padding": "20px",
+            "border": "1px solid #263449",
+            "borderRadius": "10px",
+            "flex": "1 1 180px",
+            "minWidth": "0"
+        }
+    )
+
+
+def panel3_layout(selected_companies=None):
+
+    if selected_companies is None:
+        selected_companies = DEFAULT_AI_COMPANIES
+
+    try:
+        fig = render_panel3(selected_companies)
+        crash_detail = nasdaq_crash_detail()
+    except ValueError as error:
+        return html.P(
+            f"Unable to load Panel 3. {error}",
+            style={"color": "white"}
+        )
+
+    metrics = fig.layout.meta
+
+    return html.Div(
+        [
+            html.H2(
+                "AI Boom vs. Dot-Com Bubble",
+                style={
+                    "color": "#F8FAFC",
+                    "marginBottom": "6px",
+                    "letterSpacing": "-0.5px",
+                    "fontSize": "clamp(23px, 3vw, 32px)",
+                    "marginTop": "0"
+                }
+            ),
+
+            html.P(
+                "Two technology booms. One historical comparison.",
+                style={
+                    "color": "#94A3B8",
+                    "marginTop": "0",
+                    "marginBottom": "22px"
+                }
+            ),
+
+            html.Div(
+                [
+                    metric_card(
+                        "NASDAQ PRICE RETURN",
+                        f"{metrics['nasdaq_return']:+.1f}%",
+                        GREEN if metrics['nasdaq_return'] >= 0 else PINK
+                    ),
+                    metric_card(
+                        "NASDAQ MAX DRAWDOWN",
+                        f"{metrics['nasdaq_dd']:.1f}%",
+                        PINK
+                    ),
+                    metric_card(
+                        "AI PORTFOLIO RETURN",
+                        f"{metrics['ai_return']:+.1f}%",
+                        GREEN if metrics['ai_return'] >= 0 else PINK
+                    ),
+                    metric_card(
+                        "AI MAX DRAWDOWN",
+                        f"{metrics['ai_dd']:.1f}%",
+                        PINK
+                    )
+                ],
+                style={
+                    "display": "flex",
+                    "gap": "12px",
+                    "flexWrap": "wrap",
+                    "marginBottom": "16px"
+                }
+            ),
+
+            html.Div(
+                "Solid lines · historical observations    /    Dashed lines · illustrative scenarios",
+                style={"color": "#B7C5D8", "fontSize": "12px", "lineHeight": "1.7"}
+            ),
+            dcc.Graph(
+                figure=fig,
+                config={
+                    "displaylogo": False,
+                    "responsive": True
+                },
+                # An explicit container height survives Dash's responsive resizing.
+                responsive=True,
+                style={"width": "100%", "minWidth": "0", "height": "740px"}
+            ),
+
+            dcc.Graph(
+                figure=crash_detail,
+                config={"displaylogo": False, "displayModeBar": False, "responsive": True},
+                responsive=True,
+                style={"width": "100%", "minWidth": "0", "height": "350px"}
+            ),
+
+            html.P(
+                f"AI portfolio: {metrics['company_count']} companies, "
+                "equally weighted at inception. "
+                "The 24-month Base return is assumed at +16.6%; "
+                "Bull/Bear are illustrative volatility-based scenarios using "
+                "completed monthly log returns (z = 1.645), "
+                "not statistically validated predictions. Intermediate fluctuations "
+                "are illustrative, not statistically simulated forecasts.",
+                style={
+                    "color": "#94A3B8",
+                    "fontSize": "12px",
+                    "marginTop": "8px",
+                    "lineHeight": "1.7"
+                }
+            )
+        ],
+        style={
+            "backgroundColor": NAVY,
+            "padding": "clamp(14px, 2.5vw, 28px)",
+            "minWidth": "0",
+            "borderRadius": "14px",
+            "fontFamily": "Inter, Segoe UI, Arial, sans-serif"
+        }
+    )
+
+
+# ---------------------------------------
+# 8. STANDALONE DASH TEST
+# ---------------------------------------
 
 if __name__ == "__main__":
-    render_panel3(["NVDA", "MSFT", "GOOGL"])
+
+    app = Dash(__name__, assets_folder=str(Path(__file__).parent / "panel3_assets"))
+
+    app.layout = html.Div(
+        [
+            html.Div(
+                [
+                    html.Label(
+                        "AI Companies",
+                        htmlFor="global-company-selector",
+                        style={"color": "#CBD5E1"}
+                    ),
+                    html.Span(id="panel3-selection-count", className="panel3-selection-count"),
+                    html.Div([
+                        html.Button("Select All", id="panel3-select-all", n_clicks=0),
+                        html.Button("Deselect All", id="panel3-deselect-all", n_clicks=0)
+                    ], className="panel3-selection-actions"),
+
+                    dcc.Dropdown(
+                        id="global-company-selector",
+                        options=[
+                            {"label": ticker, "value": ticker}
+                            for ticker in DEFAULT_AI_COMPANIES
+                        ],
+                        value=list(DEFAULT_AI_COMPANIES),
+                        multi=True,
+                        placeholder="Search companies…",
+                        className="panel3-company-select",
+                        style={"backgroundColor": NAVY, "color": "#F1F5F9"}
+                    )
+                ],
+                className="panel3-selector",
+                style={
+                    "marginBottom": "20px",
+                    "width": "100%",
+                    "maxWidth": "1000px",
+                    # Dash 4 styles its trigger and popup using theme variables.
+                    "--Dash-Fill-Inverse-Strong": NAVY,
+                    "--Dash-Fill-Interactive-Strong": CYAN,
+                    "--Dash-Fill-Interactive-Weak": "#153343",
+                    "--Dash-Fill-Primary-Hover": "#1E334B",
+                    "--Dash-Fill-Primary-Active": "#153343",
+                    "--Dash-Fill-Disabled": "#263449",
+                    "--Dash-Stroke-Strong": "#334155",
+                    "--Dash-Stroke-Weak": "#263449",
+                    "--Dash-Text-Primary": "#F1F5F9",
+                    "--Dash-Text-Strong": "#F1F5F9",
+                    "--Dash-Text-Weak": "#CBD5E1",
+                    "--Dash-Text-Disabled": "#94A3B8"
+                }
+            ),
+
+            html.Div(id="panel3-content")
+        ],
+        style={
+            "backgroundColor": "#080F1C",
+            "minHeight": "100vh",
+            "padding": "clamp(12px, 2vw, 25px)",
+            "fontFamily": "Inter, Segoe UI, Arial, sans-serif"
+        }
+    )
+
+    @app.callback(
+        Output("global-company-selector", "value"),
+        Input("panel3-select-all", "n_clicks"),
+        Input("panel3-deselect-all", "n_clicks"),
+        prevent_initial_call=True
+    )
+    def select_companies(select_clicks, deselect_clicks):
+        return list(DEFAULT_AI_COMPANIES) if ctx.triggered_id == "panel3-select-all" else []
+
+    @app.callback(
+        Output("panel3-selection-count", "children"),
+        Input("global-company-selector", "value")
+    )
+    def selection_count(selected_companies):
+        return f"{len(selected_companies or [])} / {len(DEFAULT_AI_COMPANIES)} selected"
+
+    @app.callback(
+        Output("panel3-content", "children"),
+        Input("global-company-selector", "value")
+    )
+    def update_panel(selected_companies):
+
+        if not selected_companies:
+            return html.P(
+                "Please select at least one company.",
+                style={"color": "white"}
+            )
+
+        return panel3_layout(selected_companies)
+
+    app.run(debug=False)
