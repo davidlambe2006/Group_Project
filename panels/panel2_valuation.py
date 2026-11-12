@@ -75,10 +75,13 @@ def load_valuation_data(selected_tickers):
                                       end=year + pd.Timedelta(days=1)
                                 )
                                  
-                                 if fx_data.empty:
+                                 if fx_data.empty or fx_data['Close'].dropna().empty:
                                      raise ValueError(f"No exchange rate available for {currency}")
                                  
                                  fx_rate = fx_data['Close'].dropna().mean()
+
+                                 if not np.isfinite(fx_rate) or fx_rate <= 0:
+                                     raise ValueError(f"Invalid exchange rate for {currency}")
                                  
                             revenue = rev * fx_rate / 1e9
                             capex = abs(expenditure) * fx_rate / 1e9
@@ -92,6 +95,9 @@ def load_valuation_data(selected_tickers):
                                     raise ValueError(f"No market cap exchange rate for {market_currency}")
                                 
                                 fx_rate_market = fx_data['Close'].dropna().iloc[-1]
+                                if not np.isfinite(fx_rate_market) or fx_rate_market <= 0:
+                                    raise ValueError(f"Invalid market cap exchange rate for {market_currency}")
+
                                 cap = cap * fx_rate_market
                                 
                             break
@@ -138,8 +144,8 @@ def calculate_regression(chart_df):
     x = chart_df['Capital Expenditure ($B)']
     y = chart_df['Annual Revenue ($B)']
 
-    # A slope needs at least two distinct X-values; R² needs variation in Y.
-    if len(x) < 2 or x.nunique() < 2 or y.nunique() < 2:
+    # Require at least 3 companies and variation in both variables.
+    if len(x) < 3 or x.nunique() < 2 or y.nunique() < 2:
         return None, None, None, x
 
     slope, intercept = np.polyfit(x, y, 1)
