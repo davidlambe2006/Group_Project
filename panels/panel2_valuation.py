@@ -149,43 +149,54 @@ def calculate_regression(chart_df):
     r_squared = 1 - ss_residual / ss_total
     return slope, intercept, r_squared, x
 
-def build_valuation_chart(chart_df, regression):
-    """Build the interactive bubble chart with its legends and regression toggle."""
-    slope, intercept, r_squared, x = regression
-    size_max = 75  # Maximum bubble size in pixels
+# Create the bubble chart
+def create_bubble_scatter(chart_df, size_max):
+    """Create the bubble chart using company financial metrics."""
 
-    #Create scatter plot using company financial metrics 
-    fig=px.scatter(
+    fig = px.scatter(
         chart_df,
         x='Capital Expenditure ($B)',
         y='Annual Revenue ($B)',
         size='Market Cap ($T)',
         color='Sector',
         color_discrete_map={
-            'Semiconductors':'#00D4FF',
-            'Software & Cloud':'#FF6B6B',
-            'Internet Services':'#00E09F',
-            'Consumer & EV':'#B477FF'
+            'Semiconductors': '#00D4FF',
+            'Software & Cloud': '#FF6B6B',
+            'Internet Services': '#00E09F',
+            'Consumer & EV': '#B477FF'
         },
         text='Ticker',
         size_max=size_max,
         hover_name='Company',
         hover_data={
-            'Ticker':False,
-            'Market Cap ($T)':':.2f',
-            'Capital Expenditure ($B)':':.2f',
-            'Annual Revenue ($B)':':.2f'    
+            'Ticker': False,
+            'Market Cap ($T)': ':.2f',
+            'Capital Expenditure ($B)': ':.2f',
+            'Annual Revenue ($B)': ':.2f'
         },
-       
         title='The AI Bubble: Capital Investment vs Revenue'
     )
 
-    #Calculate values for regression line
+    # Improve readability of bubbles and their labels
+    fig.update_traces(
+        marker=dict(
+            opacity=1.0,
+            line=dict(width=2, color='rgba(225,255,255,0.95)')
+        ),
+        textposition='middle center',
+        selector=dict(mode='markers+text')
+    )
+
+    return fig
+
+# Add regression line
+def add_regression_line(fig, slope, intercept, x):
+    """Add the fitted regression line when sufficient data exists."""
+
     if slope is not None:
-        x_line=np.linspace(x.min(), x.max(), 100)
-        y_line=slope*x_line + intercept
-        
-        #Add regression line to the scatter plot
+        x_line = np.linspace(x.min(), x.max(), 100)
+        y_line = slope * x_line + intercept
+
         fig.add_scatter(
             x=x_line,
             y=y_line,
@@ -200,18 +211,13 @@ def build_valuation_chart(chart_df, regression):
             )
         )
 
+    return fig
 
-# Improve readability of bubbles and their ticker labels.
-    fig.update_traces(
-        marker=dict(
-            opacity=1.0,
-            line=dict(width=2, color='rgba(225,255,255,0.95)')
-        ),
-        textposition="middle center",
-        selector=dict(mode='markers+text')
-    )
 
-    #Apply dark theme and customize layout, axes, hover labels, and legend
+# Style chart and add titles
+def style_valuation_chart(fig):
+    """Apply the dark theme, axes, sector legend and subtitles."""
+
     fig.update_layout(
         template='plotly_dark',
         paper_bgcolor='#031A2F',
@@ -219,8 +225,8 @@ def build_valuation_chart(chart_df, regression):
         margin=dict(r=250, t=170),
         title=dict(
             x=.5,
-            font=dict(size=24, weight='bold'),
-        ),    
+            font=dict(size=24, weight='bold')
+        ),
         xaxis=dict(
             title_text='<b>Capital Expenditure ($B)</b>',
             showline=True,
@@ -255,10 +261,11 @@ def build_valuation_chart(chart_df, regression):
             y=1.08,
             bgcolor='#061426',
             bordercolor='#1E3A5F',
-            borderwidth=2,
+            borderwidth=2
         )
     )
-    # Adding Subtitle
+
+    # Subtitle
     fig.add_annotation(
         x=0.59, y=1.2,
         xref='paper', yref='paper',
@@ -266,8 +273,9 @@ def build_valuation_chart(chart_df, regression):
         text='Exploring the Relationship Between Capital Expenditure and Annual Revenue',
         showarrow=False,
         font=dict(size=15, color='white')
-        )
-    # Clarify what bubble size represents.
+    )
+
+    # Bubble-size explanation
     fig.add_annotation(
         x=0.59, y=1.15,
         xref='paper', yref='paper',
@@ -275,9 +283,15 @@ def build_valuation_chart(chart_df, regression):
         text='Bubble Size = Market Capitalisation ($T)',
         showarrow=False,
         font=dict(size=13, color='#00D4FF')
-        )
-    
-    # Draw a custom reference legend to explain market-cap bubble sizes.
+    )
+
+    return fig
+
+# Add market capitalisation legend
+def add_market_cap_legend(fig, chart_df, size_max):
+    """Draw the custom reference legend for bubble sizes."""
+
+    # Background box
     fig.add_shape(
         type='rect',
         xref='paper', yref='paper',
@@ -287,7 +301,7 @@ def build_valuation_chart(chart_df, regression):
         fillcolor='#061426'
     )
 
-    # Market Cap legend title
+    # Legend heading
     fig.add_annotation(
         x=1.105, y=0.725,
         xanchor='center',
@@ -297,16 +311,17 @@ def build_valuation_chart(chart_df, regression):
         font=dict(size=14, color='white')
     )
 
-   # Calculate legend bubble sizes using Plotly's scaling method
-    max_cap=chart_df['Market Cap ($T)'].max()
+    # Calculate bubble sizes using Plotly's scaling method
+    max_cap = chart_df['Market Cap ($T)'].max()
 
-    for cap, y in[
-        (0.5,0.63),
-        (1.0,0.525),
-        (2.0,0.395)
+    for cap, y in [
+        (0.5, 0.63),
+        (1.0, 0.525),
+        (2.0, 0.395)
     ]:
-        size = size_max * np.sqrt(cap / max_cap) 
+        size = size_max * np.sqrt(cap / max_cap)
 
+        # Draw reference bubble
         fig.add_shape(
             type='circle',
             xref='paper', yref='paper',
@@ -320,7 +335,7 @@ def build_valuation_chart(chart_df, regression):
             fillcolor='#607D9F'
         )
 
-        #Add market cap labels beside each bubble
+        # Add market cap labels beside bubbles
         fig.add_annotation(
             x=1.1, y=y,
             xref='paper', yref='paper',
@@ -329,7 +344,14 @@ def build_valuation_chart(chart_df, regression):
             xanchor='left',
             font=dict(size=12, color='white')
         )
-    # Reserve an information panel for regression fit and its visibility toggle.
+
+    return fig
+
+# Add regression information and On/Off toggle
+def add_regression_controls(fig, r_squared):
+    """Display R-squared and add buttons to show/hide regression."""
+
+    # Regression information background
     fig.add_shape(
         type='rect',
         xref='paper', yref='paper',
@@ -339,7 +361,7 @@ def build_valuation_chart(chart_df, regression):
         fillcolor='#061426'
     )
 
-    # Label the regression information panel.
+    # Heading
     fig.add_annotation(
         x=1.11, y=0.285,
         xanchor='center',
@@ -350,62 +372,122 @@ def build_valuation_chart(chart_df, regression):
         font=dict(size=13, color='white')
     )
 
-    # When there is no valid regression, show an explanation rather than 
-    # trying to format None as an R² number or toggle a missing line.
+    # Handle unavailable regression
     if r_squared is None:
         fig.add_annotation(
-            x=1.11, y=0.16, xref='paper', yref='paper',
-            text='Regression unavailable', showarrow=False,
+            x=1.11, y=0.16,
+            xref='paper', yref='paper',
+            text='Regression unavailable',
+            showarrow=False,
             font=dict(size=10, color='white')
         )
+
     else:
-        fit_label = f"{r_squared * 100:.1f}% of revenue variation<br>explained by CapEx"
-        
+        # Explanation of R-squared
+        fit_label = (
+            f"{r_squared * 100:.1f}% of revenue variation<br>"
+            "explained by CapEx"
+        )
 
         fig.add_annotation(
-            x=1.11, y=0.14, xanchor='center',
-            xref='paper', yref='paper', text=fit_label,
-            showarrow=False, font=dict(size=10, color='white')
+            x=1.11, y=0.14,
+            xanchor='center',
+            xref='paper', yref='paper',
+            text=fit_label,
+            showarrow=False,
+            font=dict(size=10, color='white')
         )
+
         interpretation_index = len(fig.layout.annotations) - 1
 
+        # R-squared value
         fig.add_annotation(
-            x=1.11, y=0.205, xanchor='center',
+            x=1.11, y=0.205,
+            xanchor='center',
             xref='paper', yref='paper',
             text=f"<b>R² = {r_squared:.6f}</b>",
-            showarrow=False, font=dict(size=15, color='#FFD166')
+            showarrow=False,
+            font=dict(size=15, color='#FFD166')
         )
+
         r2_index = len(fig.layout.annotations) - 1
 
-        # Toggle only the regression trace and its two annotations, not bubbles.
+        # Identify regression trace
         regression_trace_index = len(fig.data) - 1
+
+        # On/Off controls
         fig.update_layout(
-            updatemenus=[dict(
-            type='buttons', 
-            direction='right', 
-            showactive=True, 
-            active=0,
-            x=1.11, y=0.075, 
-            xanchor='center', yanchor='middle',
-            bgcolor='#607D9F', bordercolor='#00D4FF', borderwidth=1,
-            font=dict(size=12, color='black'),
-            pad=dict(l=2, r=2, t=2, b=2),
-            buttons=[
-                dict(label='On', method='update', args=[
-                    {'visible': [True]},
-                    {f'annotations[{r2_index}].visible': True,
-                     f'annotations[{interpretation_index}].visible': True},
-                    [regression_trace_index]
-                ]),
-                dict(label='Off', method='update', args=[
-                    {'visible': [False]},
-                    {f'annotations[{r2_index}].visible': False,
-                     f'annotations[{interpretation_index}].visible': False},
-                    [regression_trace_index]
-                ])
+            updatemenus=[
+                dict(
+                    type='buttons',
+                    direction='right',
+                    showactive=True,
+                    active=0,
+                    x=1.11,
+                    y=0.075,
+                    xanchor='center',
+                    yanchor='middle',
+                    bgcolor='#607D9F',
+                    bordercolor='#00D4FF',
+                    borderwidth=1,
+                    font=dict(size=12, color='black'),
+                    pad=dict(l=2, r=2, t=2, b=2),
+                    buttons=[
+                        dict(
+                            label='On',
+                            method='update',
+                            args=[
+                                {'visible': [True]},
+                                {
+                                    f'annotations[{r2_index}].visible': True,
+                                    f'annotations[{interpretation_index}].visible': True
+                                },
+                                [regression_trace_index]
+                            ]
+                        ),
+                        dict(
+                            label='Off',
+                            method='update',
+                            args=[
+                                {'visible': [False]},
+                                {
+                                    f'annotations[{r2_index}].visible': False,
+                                    f'annotations[{interpretation_index}].visible': False
+                                },
+                                [regression_trace_index]
+                            ]
+                        )
+                    ]
+                )
             ]
-        )])
+        )
+
     return fig
+
+# Main function - combine all chart components
+def build_valuation_chart(chart_df, regression):
+    """Build the complete interactive valuation chart."""
+
+    slope, intercept, r_squared, x = regression
+    size_max = 75
+
+    # Create bubble chart
+    fig = create_bubble_scatter(chart_df, size_max)
+
+    # Add fitted regression line
+    fig = add_regression_line(fig, slope, intercept, x)
+
+    # Apply chart styling
+    fig = style_valuation_chart(fig)
+
+    # Add market cap bubble-size legend
+    fig = add_market_cap_legend(fig, chart_df, size_max)
+
+    # Add regression information and toggle
+    fig = add_regression_controls(fig, r_squared)
+
+    return fig
+
 
     
 def show_panel2(selected_tickers=tickers):
