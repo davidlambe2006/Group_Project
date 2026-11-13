@@ -101,7 +101,7 @@ def load_valuation_data(selected_tickers):
                                 cap = cap * fx_rate_market
                                 
                             break
-
+                        
         except Exception as error:
             failed_tickers.append(ticker)
             cap, capex, revenue = None, None, None
@@ -182,6 +182,7 @@ def create_bubble_scatter(chart_df, size_max):
         },
         title='The AI Bubble: Capital Investment vs Revenue'
     )
+
 
     # Improve readability of bubbles and their labels
     fig.update_traces(
