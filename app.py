@@ -230,7 +230,7 @@ def stock_build_chart_3d(indexed_prices):
     days = (dates - dates[0]).days
     baseline = 100
     for number, ticker in enumerate(indexed_prices.columns):
-        colour = stock_STOCK_COLOURS[number % len(stock_STOCK_COLOURS)]
+        colour = stock_colour(ticker, number)
         z_values = indexed_prices[ticker].values
         y_level = number
         fig.add_trace(
@@ -334,6 +334,7 @@ def p1_create_app(**kwargs):
 
     app.layout = html.Div(
         [
+            dcc.Location(id="p1-url", refresh=False),
             html.H2("Panel 1 — AI Stock Performance (3D)"),
             html.P(
                 "How have AI-related companies performed relative to the wider stock market?"
@@ -411,6 +412,14 @@ def p1_create_app(**kwargs):
     )
 
     @app.callback(
+        Output("p1-companies", "value"),
+        Input("p1-url", "search"),
+    )
+    def use_header_selection(search):
+        # Opened from the overview: start from the companies chosen in the header.
+        return global_parse_selection(search) or no_update
+
+    @app.callback(
         Output("p1-result", "children"),
         Input("p1-companies", "value"),
         Input("p1-period", "value"),
@@ -443,7 +452,7 @@ def p1_create_app(**kwargs):
                 sampled = pd.concat([sampled, indexed.iloc[[-1]]])
             cards = [html.H4("Total Return")]
             for i, ticker in enumerate(indexed.columns):
-                colour = stock_STOCK_COLOURS[i % len(stock_STOCK_COLOURS)]
+                colour = stock_colour(ticker, i)
                 cards.append(
                     html.Div(
                         [
