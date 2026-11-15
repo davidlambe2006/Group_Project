@@ -467,7 +467,7 @@ def p1_create_app(**kwargs):
                         style={
                             "background": "#102A45",
                             "borderLeft": f"4px solid {colour}",
-                            "borderRadius": "7px",
+   p2                         "borderRadius": "7px",
                             "padding": "12px",
                             "marginBottom": "8px",
                             "display": "flex",
@@ -512,21 +512,25 @@ def p1_create_app(**kwargs):
 
     return app
 
+# The same 12 companies as panels 1, 3 and 4 (this list used to hold TSLA in place
+# of CRM), so the header selection means the same thing in every panel.
+p2_tickers = list(stock_COMPANIES)
+p2_sector_map = {
+    "NVDA": "Semiconductors",
+    "MSFT": "Software & Cloud",
+    "GOOGL": "Software & Cloud",
+    "AMZN": "Software & Cloud",
+    "META": "Internet Services",
+    "AVGO": "Semiconductors",
+    "AMD": "Semiconductors",
+    "TSM": "Semiconductors",
+    "ORCL": "Software & Cloud",
+    "PLTR": "Software & Cloud",
+    "CRM": "Software & Cloud",
+    "TSLA": "Consumer & EV",
+    "ASML": "Semiconductors",
+}
 
-p2_tickers = [
-    "NVDA",
-    "MSFT",
-    "GOOGL",
-    "AMZN",
-    "META",
-    "AVGO",
-    "AMD",
-    "TSM",
-    "ORCL",
-    "PLTR",
-    "TSLA",
-    "ASML",
-]
 p2_sector_map = {
     "NVDA": "Semiconductors",
     "MSFT": "Software & Cloud",
@@ -1029,6 +1033,7 @@ def p2_create_app(selected_tickers=p2_tickers, **kwargs):
     }
     app.layout = html.Div(
         [
+            dcc.Location(id="p2-url", refresh=False),
             html.Button("Refresh Yahoo data", id="valuation-refresh", n_clicks=0),
             dcc.Tabs(
                 id="view-toggle",
@@ -1065,9 +1070,13 @@ def p2_create_app(selected_tickers=p2_tickers, **kwargs):
         Output("view-content", "children"),
         Input("view-toggle", "value"),
         Input("valuation-refresh", "n_clicks"),
+        Input("p2-url", "search"),
     )
-    def switch_view(view, _refresh):
+    def update_view(view, _refresh, search):
         df, failed_tickers = p2_load_valuation_data(selected_tickers)
+        chosen = global_parse_selection(search)
+        if chosen:
+            df = df[df["Ticker"].isin(chosen)]
         chart_df = p2_prepare_chart_data(df)
         if chart_df.empty:
             return html.P(
