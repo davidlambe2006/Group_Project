@@ -467,7 +467,7 @@ def p1_create_app(**kwargs):
                         style={
                             "background": "#102A45",
                             "borderLeft": f"4px solid {colour}",
-   p2                         "borderRadius": "7px",
+                            "borderRadius": "7px",
                             "padding": "12px",
                             "marginBottom": "8px",
                             "display": "flex",
@@ -1736,6 +1736,7 @@ def p3_create_app(**kwargs):
                     "--Dash-Text-Disabled": "#94A3B8",
                 },
             ),
+            dcc.Location(id="p3-url", refresh=False),
             html.Button("Retry Yahoo data", id="panel3-retry", n_clicks=0),
             dcc.Loading(html.Div(id="panel3-content")),
         ],
@@ -1751,14 +1752,15 @@ def p3_create_app(**kwargs):
         Output("global-company-selector", "value"),
         Input("panel3-select-all", "n_clicks"),
         Input("panel3-deselect-all", "n_clicks"),
-        prevent_initial_call=True,
+        Input("p3-url", "search"),
     )
-    def select_companies(select_clicks, deselect_clicks):
-        return (
-            list(p3_DEFAULT_AI_COMPANIES)
-            if ctx.triggered_id == "panel3-select-all"
-            else []
-        )
+    def select_companies(select_clicks, deselect_clicks, search):
+        if ctx.triggered_id == "panel3-select-all":
+            return list(p3_DEFAULT_AI_COMPANIES)
+        if ctx.triggered_id == "panel3-deselect-all":
+            return []
+        # Page load: start from the companies chosen in the header, if any.
+        return global_parse_selection(search) or no_update
 
     @app.callback(
         Output("panel3-selection-count", "children"),
