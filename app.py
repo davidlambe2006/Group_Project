@@ -21,6 +21,7 @@ import time
 from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache, wraps
 from math import isfinite
+from urllib.parse import parse_qs, urlencode
 import numpy as np
 import pandas as pd
 import plotly.express as px
@@ -28,6 +29,7 @@ import plotly.graph_objects as go
 import yfinance as yf
 from flask import Flask
 from dash import Dash, Input, Output, State, ctx, dcc, html, dash_table, no_update
+from dash.exceptions import PreventUpdate
 
 stock_COMPANIES = {
     "NVDA": "NVIDIA",
@@ -62,6 +64,51 @@ stock_STOCK_COLOURS = [
     "#FFFFFF",
     "#A8B9CF",
 ]
+
+
+GLOBAL_COMPANIES = list(stock_COMPANIES)
+GLOBAL_PICK_COUNT = 6
+GLOBAL_PANELS = (1, 2, 3)
+# Colours follow the ticker rather than its position, so a company keeps its
+# colour as the selection changes. The default six and the two benchmarks keep
+# the colours they had before the toggle existed.
+stock_COLOUR_BY_TICKER = {
+    ticker: stock_STOCK_COLOURS[number]
+    for number, ticker in enumerate(
+        stock_DEFAULT_COMPANIES
+        + list(stock_BENCHMARKS)
+        + [t for t in GLOBAL_COMPANIES if t not in stock_DEFAULT_COMPANIES]
+    )
+}
+
+
+def stock_colour(ticker, position):
+    """Colour for a ticker; falls back to its position in the palette."""
+    return stock_COLOUR_BY_TICKER.get(
+        ticker, stock_STOCK_COLOURS[position % len(stock_STOCK_COLOURS)]
+    )
+
+
+def global_normalise_selection(values):
+    """Valid tickers only, without duplicates, in the canonical 12-company order."""
+    chosen = {str(value).strip().upper() for value in (values or [])}
+    return [ticker for ticker in GLOBAL_COMPANIES if ticker in chosen]
+
+
+def global_parse_selection(search):
+    """Read '?companies=NVDA,MSFT,...' from a URL query string; None if absent."""
+    raw = ",".join(parse_qs((search or "").lstrip("?")).get("companies", []))
+    return global_normalise_selection(raw.split(",")) or None
+
+
+def global_panel_url(panel, selection):
+    """Address of a full-size panel; panels 1-3 carry the header selection."""
+    chosen = global_normalise_selection(selection)
+    if panel in GLOBAL_PANELS and chosen:
+        query = urlencode({"companies": ",".join(chosen)}, safe=",")
+        return f"/panel/{panel}/?{query}"
+    return f"/panel/{panel}/"
+
 
 
 def stock_get_prices(tickers, start, end):
