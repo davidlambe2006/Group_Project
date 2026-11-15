@@ -2,7 +2,7 @@
 
 Install: python -m pip install dash plotly yfinance
 Run:     python panels/panel4_simulator.py
-Open:    http://127.0.0.1:8054
+Open:    http://127.0.0.1:8056
 
 Embed in the team's Dash app (no server starts when imported):
     from panels.panel4_simulator import create_layout, register_callbacks
@@ -74,11 +74,11 @@ def load_company_data(company, force=False):
     currency = info.get("currency")
     financial_currency = info.get("financialCurrency")
     if currency != "USD" or not financial_currency:
-        raise ValueError("The listing/reporting currency could not be verified. Use manual USD inputs.")
+        raise ValueError("The listing/reporting currency could not be verified. Refresh to retry.")
 
     statement = stock.income_stmt
     if statement.empty or "Total Revenue" not in statement.index:
-        raise ValueError("Annual revenue is unavailable from Yahoo. Try again or enter it manually.")
+        raise ValueError("Annual revenue is unavailable from Yahoo. Refresh to retry.")
     revenues = statement.loc["Total Revenue"].dropna().sort_index(ascending=False)
     if revenues.empty:
         raise ValueError("Yahoo did not provide an annual revenue figure.")
@@ -91,14 +91,14 @@ def load_company_data(company, force=False):
     shares = positive_number(share_value, "total equivalent shares")
     market_cap = positive_number(info.get("marketCap"), "market capitalisation")
     if abs(shares * price / market_cap - 1) > .10:
-        raise ValueError("Yahoo's price and share units disagree. Refresh or use verified manual inputs.")
+        raise ValueError("Yahoo's price and share units disagree. Refresh to retry.")
 
     fx_rate, fx_note = 1.0, "No currency conversion needed."
     if financial_currency != currency:
         fx_symbol = f"{financial_currency}{currency}=X"
         history = yf.Ticker(fx_symbol).history(period="5d", auto_adjust=False)
         if history.empty:
-            raise ValueError(f"Could not load {financial_currency}/USD FX. Use manual USD revenue.")
+            raise ValueError(f"Could not load {financial_currency}/USD FX. Refresh to retry.")
         closes = history["Close"].dropna()
         if closes.empty:
             raise ValueError("The FX series has no valid closing rate.")
@@ -174,16 +174,40 @@ def heatmap_data(data, assumptions):
                 for g in growth] for m in margins]
     return growth, margins, results
 
+def scenario_options(selected="Base"):
+    """Clearly mark the active scenario with colour and a text label."""
+    descriptions = {"Bear": "Cautious", "Base": "Central", "Bull": "Optimistic"}
+    colours = {"Bear": "#ffb47d", "Base": CYAN, "Bull": "#8ce6ae"}
+    options = []
+    for name, values in SCENARIOS.items():
+        active = name == selected
+        colour = colours[name]
+        options.append({"value": name, "label": html.Span([
+            html.Span([
+                html.Strong(f"{name} - {descriptions[name]}",
+                            style={"fontSize": "16px"}),
+                html.Small("SELECTED", style={
+                    "display": "inline-block" if active else "none",
+                    "backgroundColor": NAVY, "color": WHITE,
+                    "padding": "3px 6px", "borderRadius": "4px",
+                    "fontSize": "10px", "fontWeight": "bold", "letterSpacing": ".5px",
+                }),
+            ], style={"display": "flex", "alignItems": "center",
+                      "justifyContent": "space-between", "gap": "8px", "flexWrap": "wrap"}),
+            html.Small(f'{values["growth"]}% growth / {values["margin"]}% margin',
+                       style={"display": "block", "color": NAVY if active else MUTED,
+                              "marginTop": "5px"}),
+        ], style={"display": "block", "flex": "1", "padding": "11px 12px",
+                  "border": f"2px solid {colour if active else LINE}",
+                  "outline": f"2px solid {WHITE}" if active and name == "Base" else "none",
+                  "outlineOffset": "1px" if active and name == "Base" else "0",
+                  "borderRadius": "6px", "color": NAVY if active else WHITE,
+                  "backgroundColor": colour if active else NAVY})})
+    return options
+
+
 def create_layout():
     """Return Panel 4's layout for a standalone or shared Dash app."""
-    def number(label, key):
-        return html.Label([
-            label,
-            dcc.Input(id=f"panel4-{key}", type="number", min=0,
-                      placeholder="Enter a positive number", debounce=True,
-                      style={"width": "100%", "boxSizing": "border-box", "padding": "9px"}),
-        ], style={"display": "block", "marginBottom": "12px"})
-
     return html.Div([
         dcc.Store(id="panel4-data", storage_type="memory"),
         html.H2("04 | AI Valuation Simulator", style={"color": CYAN}),
@@ -196,20 +220,15 @@ def create_layout():
                             style=BUTTON),
                 dcc.Loading(html.Div(id="panel4-status", role="status",
                                     style={"fontSize": "13px", "marginBottom": "16px"})),
-                html.H3("Scenario"),
-                dcc.RadioItems(id="panel4-scenario", options=list(SCENARIOS), value="Base",
-                               labelStyle={"display": "inline-block", "marginRight": "12px"}),
+                html.H3("Scenario", style={"margin": "12px 0 8px"}),
+                dcc.RadioItems(id="panel4-scenario", options=scenario_options(), value="Base",
+                               style={"display": "grid", "gap": "6px", "color": WHITE},
+                               inputStyle={"accentColor": CYAN, "margin": "0 8px 0 0",
+                                           "width": "17px", "height": "17px", "flexShrink": "0"},
+                               labelStyle={"display": "flex", "alignItems": "center",
+                                           "cursor": "pointer", "color": WHITE}),
                 html.Div(id="panel4-assumptions", style={"margin": "16px 0"}),
-                html.Details([
-                    html.Summary("Data & manual inputs"),
-                    html.P("Use USD figures for the selected listing. Refresh restores Yahoo data."),
-                    number("Share / ADS price (USD)", "price"),
-                    number("Annual revenue (USD billions)", "revenue"),
-                    number("Total equivalent shares (billions)", "shares"),
-                    html.Button("Apply manual inputs", id="panel4-apply", n_clicks=0,
-                                style=BUTTON),
-                ], open=True),
-            ], style={"flex": "1 1 250px", "minWidth": "230px"}),
+            ], style={"flex": "0 1 290px", "minWidth": "230px"}),
             html.Main([
                 dcc.Loading(html.Div([
                     html.Div(id="panel4-source", style={"color": MUTED, "fontSize": "13px"}),
@@ -219,7 +238,13 @@ def create_layout():
                     html.P("Turquoise = gain | White = 0% | Orange = loss. "
                            "Solid outline = Base; dashed outline = selected scenario.",
                            style={"color": MUTED, "fontSize": "13px"}),
-                    dcc.Graph(id="panel4-heatmap", config={"displayModeBar": False},
+                    html.Button("Reset view", id="panel4-reset-view", n_clicks=0,
+                                style={**BUTTON, "margin": "0 0 8px"}),
+                    dcc.Graph(id="panel4-heatmap", config={
+                                  "displayModeBar": True, "displaylogo": False,
+                                  "modeBarButtons": [["zoomIn2d", "zoomOut2d", "resetScale2d"]],
+                                  "doubleClick": "reset",
+                              },
                               style={"height": "480px"}),
                     html.Details([
                         html.Summary("Compare scenarios"),
@@ -227,18 +252,23 @@ def create_layout():
                     ]),
                 ])),
                 html.Details([
-                    html.Summary("How it works"),
-                    html.P("Future price = annual revenue Ã— (1 + growth)^years Ã— net margin "
-                           "Ã· equivalent shares Ã— future P/E."),
-                    html.P("Annual return = (future price Ã· current price)^(1 Ã· years) âˆ’ 1. "
-                           "Growth, margin, shares, P/E and FX stay constant. "
-                           "Presets are illustrative assumptions. Excludes dividends, fees and taxes."),
-                ], style={"marginTop": "20px"}),
+                    html.Summary("How it works", style={
+                        "cursor": "pointer", "fontWeight": "bold", "color": WHITE,
+                        "fontSize": "16px", "padding": "4px 0",
+                    }),
+                    html.P("Uses the selected company's Yahoo revenue, share count and current price. "
+                           "Bear / Base / Bull apply shared growth and margin assumptions to estimate "
+                           "a price in five years at 30x earnings and the annualised return from today's price.",
+                           style={"lineHeight": "1.5", "fontSize": "14px"}),
+                    html.Small("Illustrative estimates. Shares and FX stay fixed; dividends, fees and taxes are excluded.",
+                               style={"color": MUTED}),
+                ], style={"marginTop": "20px", "padding": "14px 16px",
+                          "border": f"1px solid {LINE}", "borderRadius": "6px"}),
             ], style={"flex": "4 1 600px", "minWidth": "0"}),
         ], style={"display": "flex", "flexWrap": "wrap", "gap": "28px"}),
     ], id="panel4", style={"backgroundColor": NAVY, "color": WHITE,
                             "fontFamily": "Arial, sans-serif", "padding": "24px",
-                            "minHeight": "100vh", "boxSizing": "border-box"})
+                            "boxSizing": "border-box"})
 
 
 def make_heatmap(data, assumptions):
@@ -250,7 +280,7 @@ def make_heatmap(data, assumptions):
         xaxis_title="Revenue growth (%)", yaxis_title="Net profit margin (%)",
     )
     if not data:
-        figure.add_annotation(text="Load Yahoo data or enter manual inputs", showarrow=False,
+        figure.add_annotation(text="Select a company or refresh Yahoo data", showarrow=False,
                               x=.5, y=.5, xref="paper", yref="paper")
         return figure
     growth, margins, results = heatmap_data(data, assumptions)
@@ -280,33 +310,17 @@ def make_heatmap(data, assumptions):
     return figure
 
 
-def update_company_data(company, trigger, price, revenue, shares, previous):
-    """Keep each browser's selected/manual inputs in its own dcc.Store."""
+def update_company_data(company, trigger, previous):
+    """Keep each browser's Yahoo company data in its own dcc.Store."""
     saved = previous if previous and previous.get("company") == company else None
     try:
-        if trigger == "panel4-apply":
-            if company not in COMPANIES:
-                raise ValueError("Choose a company from the list.")
-            data = {
-                "company": company, "ticker": COMPANIES[company],
-                "current_price": positive_number(price, "share price"),
-                "revenue": positive_number(revenue, "annual revenue") * 1e9,
-                "shares": positive_number(shares, "equivalent shares") * 1e9,
-                "mode": "Manual inputs", "source": "User-entered USD inputs",
-                "quote_date": "User supplied; date unspecified",
-                "revenue_date": "User supplied; date unspecified",
-                "retrieved": datetime.now(timezone.utc).strftime("%d %b %Y %H:%M UTC"),
-                "share_note": "User-supplied equivalent share count.",
-                "fx_note": "Revenue entered in USD. FX stays constant.",
-            }
-        else:
-            data = load_company_data(company, force=trigger == "panel4-refresh")
+        data = load_company_data(company, force=trigger == "panel4-refresh")
         for scenario in SCENARIOS.values():
             heatmap_data(data, scenario)
         return data, f'{data["mode"]} | Retrieved {data["retrieved"]}'
     except Exception as error:
         status = f"Could not update data: {error} "
-        status += "Showing previous inputs." if saved else "Retry or enter manual USD inputs."
+        status += "Showing previous data." if saved else "Refresh Yahoo data to retry."
         return saved, status
 
 
@@ -348,24 +362,32 @@ def render_results(data, scenario):
 
 def register_callbacks(app):
     """Call once on the shared app after adding create_layout() to its layout."""
+    @app.callback(Output("panel4-scenario", "options"), Input("panel4-scenario", "value"))
+    def highlight_scenario(scenario):
+        return scenario_options(scenario)
+
     @app.callback(
         Output("panel4-data", "data"), Output("panel4-status", "children"),
         Input("panel4-company", "value"), Input("panel4-refresh", "n_clicks"),
-        Input("panel4-apply", "n_clicks"),
-        State("panel4-price", "value"), State("panel4-revenue", "value"),
-        State("panel4-shares", "value"), State("panel4-data", "data"),
+        State("panel4-data", "data"),
     )
-    def update_data(company, _refresh, _apply, price, revenue, shares, previous):
-        return update_company_data(company, ctx.triggered_id, price, revenue, shares, previous)
+    def update_data(company, _refresh, previous):
+        return update_company_data(company, ctx.triggered_id, previous)
 
     @app.callback(
         Output("panel4-metrics", "children"), Output("panel4-heatmap", "figure"),
         Output("panel4-comparison", "children"), Output("panel4-source", "children"),
         Output("panel4-assumptions", "children"),
         Input("panel4-data", "data"), Input("panel4-scenario", "value"),
+        Input("panel4-reset-view", "n_clicks"),
     )
-    def update_results(data, scenario):
-        return render_results(data, scenario)
+    def update_results(data, scenario, reset_clicks):
+        metrics, figure, table, source, description = render_results(data, scenario)
+        # Changing the revision clears Plotly's stored zoom/pan ranges.
+        if ctx.triggered_id == "panel4-reset-view":
+            figure.update_layout(uirevision=f"reset-{reset_clicks}",
+                                 xaxis_autorange=True, yaxis_autorange=True)
+        return metrics, figure, table, source, description
 
 
 def create_app():
@@ -397,6 +419,6 @@ if __name__ == "__main__":
     app = create_app()
     print("Starting Panel 4. Your browser will open when Dash is ready. "
           "Keep this terminal running.")
-    threading.Thread(target=open_when_ready, args=("http://127.0.0.1:8054",),
+    threading.Thread(target=open_when_ready, args=("http://127.0.0.1:8056",),
                      daemon=True).start()
-    app.run(debug=False, host="127.0.0.1", port=8054)
+    app.run(debug=False, host="127.0.0.1", port=8056)
