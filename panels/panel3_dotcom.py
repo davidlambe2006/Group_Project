@@ -1,4 +1,4 @@
-﻿
+
 import numpy as np
 import pandas as pd
 import yfinance as yf
@@ -9,15 +9,17 @@ from urllib.parse import parse_qs
 from dash import Dash, dcc, html, Input, Output
 
 
-# All 12 companies, selected by default
-DEFAULT_AI_COMPANIES = [
-    "NVDA", "MSFT", "GOOGL", "AMZN",
-    "META", "AVGO", "AMD", "TSM",
-    "ORCL", "PLTR", "CRM", "ASML"
-]
+
+try:
+    from .dashboard_shared import COMPANIES as SHARED_COMPANIES, TICKERS, NAVY as SHARED_NAVY, CARD, BORDER, GRID
+except ImportError:  # Direct execution of a panel demo.
+    from dashboard_shared import COMPANIES as SHARED_COMPANIES, TICKERS, NAVY as SHARED_NAVY, CARD, BORDER, GRID
+
+# The universal ten-company universe, all selected by default.
+DEFAULT_AI_COMPANIES = list(TICKERS)
 
 # Chart colours
-NAVY = "#0B1220"
+NAVY = SHARED_NAVY
 BLUE = "#38BDF8"
 CYAN = "#00E5A8"
 GREEN = "#4ADE80"
@@ -717,7 +719,7 @@ def selection_from_search(search):
         ticker.strip().upper()
         for value in query["companies"]
         for ticker in value.split(",")
-        if ticker.strip()
+        if ticker.strip().upper() in TICKERS
     ))
 
 
@@ -730,7 +732,7 @@ def create_app(**kwargs):
             dcc.Loading(html.Div(id="panel3-content"))
         ],
         style={
-            "backgroundColor": "#080F1C",
+            "backgroundColor": NAVY,
             "minHeight": "100vh",
             "padding": "clamp(12px, 2vw, 25px)",
             "fontFamily": "Inter, Segoe UI, Arial, sans-serif"

@@ -12,31 +12,17 @@ import plotly.graph_objects as go
 #Python tools for handling dates
 from datetime import date, timedelta
 
+
+try:
+    from .dashboard_shared import COMPANIES as SHARED_COMPANIES, TICKERS, NAVY as SHARED_NAVY, CARD, BORDER, GRID
+except ImportError:  # Direct execution of a panel demo.
+    from dashboard_shared import COMPANIES as SHARED_COMPANIES, TICKERS, NAVY as SHARED_NAVY, CARD, BORDER, GRID
+
 #Company Information
 
 #Dictionary linking stock ticker symbols to company names
-COMPANIES = {
-    "NVDA": "NVIDIA",
-    "MSFT": "Microsoft",
-    "GOOGL": "Alphabet",
-    "AMZN": "Amazon",
-    "META": "Meta",
-    "AVGO": "Broadcom",
-    "AMD": "Advanced Micro Devices",
-    "TSM": "Taiwan Semiconductor",
-    "ORCL": "Oracle",
-    "PLTR": "Palantir",
-    "CRM": "Salesforce",
-    "ASML": "ASML"
-}
-DEFAULT_COMPANIES = [
-    "NVDA",
-    "MSFT",
-    "GOOGL",
-    "AMZN",
-    "META",
-    "AMD"
-]
+COMPANIES = dict(SHARED_COMPANIES)
+DEFAULT_COMPANIES = list(TICKERS)
 
 # Stock market ETFs used as comparison benchmarks
 BENCHMARKS = {
@@ -47,7 +33,7 @@ BENCHMARKS = {
 #Defining dashboard colours
 
 #Background colour for the dashboard
-DARK_BLUE = "#0A1830"
+DARK_BLUE = SHARED_NAVY
 
 # Colours used for different company lines
 STOCK_COLOURS = [
@@ -66,7 +52,7 @@ STOCK_COLOURS = [
     "#FFFFFF",  # White
     "#A8B9CF"   # Grey
 ]
-CARD_BLUE = "#102A45"
+CARD_BLUE = CARD
 TEXT_MUTED = "#A8B9CF"
 
 PERIOD_OPTIONS = [
@@ -347,19 +333,19 @@ def build_chart_3d(indexed_prices):
                 title="Date",
                 tickvals=days[tick_positions],
                 ticktext=dates[tick_positions].strftime("%b %Y"),
-                gridcolor="#35506D",
+                gridcolor=GRID,
                 backgroundcolor=DARK_BLUE
             ),
             yaxis=dict(
                 title="Company",
                 tickvals=list(range(len(indexed_prices.columns))),
                 ticktext=list(indexed_prices.columns),
-                gridcolor="#35506D",
+                gridcolor=GRID,
                 backgroundcolor=DARK_BLUE
             ),
             zaxis=dict(
                 title="Indexed Price (Base = 100)",
-                gridcolor="#35506D",
+                gridcolor=GRID,
                 backgroundcolor=DARK_BLUE
             ),
             bgcolor=DARK_BLUE,
@@ -664,7 +650,7 @@ def update_panel1(
             )
 
         ], style={
-            "backgroundColor": "#102A45",
+            "backgroundColor": "#131F31",
             "borderLeft": f"4px solid {colour}",
             "borderRadius": "7px",
             "padding": "12px",

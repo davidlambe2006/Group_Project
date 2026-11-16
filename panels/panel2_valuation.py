@@ -5,12 +5,14 @@ import numpy as np
 from dash import Dash, dcc, html, dash_table, Input, Output
 
 
+
+try:
+    from .dashboard_shared import COMPANIES as SHARED_COMPANIES, TICKERS, NAVY as SHARED_NAVY, CARD, BORDER, GRID
+except ImportError:  # Direct execution of a panel demo.
+    from dashboard_shared import COMPANIES as SHARED_COMPANIES, TICKERS, NAVY as SHARED_NAVY, CARD, BORDER, GRID
+
 # Companies and sectors used for bubble colours.
-tickers = [
-    'NVDA', 'MSFT', 'GOOGL', 'AMZN',
-    'META', 'AVGO', 'AMD', 'TSM',
-    'ORCL', 'PLTR', 'TSLA', 'ASML'
-]
+tickers = list(TICKERS)
 
 sector_map = {
     "NVDA": "Semiconductors",
@@ -18,12 +20,10 @@ sector_map = {
     "GOOGL": "Software & Cloud",
     "AMZN": "Software & Cloud",
     "META": "Internet Services",
-    "AVGO": "Semiconductors",
     "AMD": "Semiconductors",
     "TSM": "Semiconductors",
     "ORCL": "Software & Cloud",
     "PLTR": "Software & Cloud",
-    "TSLA": "Consumer & EV",
     "ASML": "Semiconductors"
 }
 
@@ -227,8 +227,8 @@ def style_valuation_chart(fig):
 
     fig.update_layout(
         template='plotly_dark',
-        paper_bgcolor='#031A2F',
-        plot_bgcolor='#031A2F',
+        paper_bgcolor='#0B1220',
+        plot_bgcolor='#0B1220',
         margin=dict(r=250, t=170),
         title=dict(
             x=.5,
@@ -239,7 +239,7 @@ def style_valuation_chart(fig):
             showline=True,
             linecolor='white',
             linewidth=2,
-            gridcolor='#243449',
+            gridcolor=GRID,
             griddash='dash',
             zeroline=False
         ),
@@ -249,7 +249,7 @@ def style_valuation_chart(fig):
             showline=True,
             linecolor='white',
             linewidth=2,
-            gridcolor='#243449',
+            gridcolor=GRID,
             griddash='dash',
             zeroline=False,
             minor=dict(
@@ -545,7 +545,7 @@ def show_panel2(selected_tickers=tickers):
     app = Dash(__name__)
 
     tab_style = {
-        'backgroundColor': '#102D47',
+        'backgroundColor': '#131F31',
         'color': 'white',
         'border': '1px solid #1E3A5F',
         'padding': '12px'
@@ -554,7 +554,7 @@ def show_panel2(selected_tickers=tickers):
     selected_tab_style = {
         **tab_style,
         'backgroundColor': '#FFFFFF',
-        'color': '#031A2F',
+        'color': '#0B1220',
         'fontWeight': 'bold',
         'borderTop': '2px solid #00D4FF'
     }
@@ -589,7 +589,7 @@ def show_panel2(selected_tickers=tickers):
             html.Div(id='view-content')
         ],
         style={
-            'backgroundColor': '#031A2F',
+            'backgroundColor': '#0B1220',
             'minHeight': '100vh',
             'margin': '0',
             'padding': '8px 0',
@@ -648,7 +648,7 @@ def show_panel2(selected_tickers=tickers):
                         },
 
                         style_header={
-                            'backgroundColor': '#163954',
+                            'backgroundColor': '#131F31',
                             'color': 'white',
                             'fontWeight': 'bold',
                             'border': '1px solid #2D5474',
@@ -656,7 +656,7 @@ def show_panel2(selected_tickers=tickers):
                         },
 
                         style_cell={
-                            'backgroundColor': '#0B2943',
+                            'backgroundColor': '#131F31',
                             'color': 'white',
                             'border': '1px solid #23445E',
                             'padding': '14px',
@@ -668,7 +668,7 @@ def show_panel2(selected_tickers=tickers):
                         style_data_conditional=[
                             {
                                 'if': {'row_index': 'odd'},
-                                'backgroundColor': '#102F49'
+                                'backgroundColor': '#131F31'
                             }
                         ]
                     )

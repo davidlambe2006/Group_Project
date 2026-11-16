@@ -33,24 +33,12 @@ from dash.exceptions import PreventUpdate
 
 from panels.panel4_simulator import CYAN
 from panels import panel3_dotcom as panel3
+from panels.dashboard_shared import COMPANIES, TICKERS, NAVY as SHARED_NAVY, CARD, BORDER, GRID, apply_theme
 
-stock_COMPANIES = {
-    "NVDA": "NVIDIA",
-    "MSFT": "Microsoft",
-    "GOOGL": "Alphabet",
-    "AMZN": "Amazon",
-    "META": "Meta",
-    "AVGO": "Broadcom",
-    "AMD": "Advanced Micro Devices",
-    "TSM": "Taiwan Semiconductor",
-    "ORCL": "Oracle",
-    "PLTR": "Palantir",
-    "CRM": "Salesforce",
-    "ASML": "ASML",
-}
-stock_DEFAULT_COMPANIES = ["NVDA", "MSFT", "GOOGL", "AMZN", "META", "AMD"]
+stock_COMPANIES = dict(COMPANIES)
+stock_DEFAULT_COMPANIES = list(TICKERS)
 stock_BENCHMARKS = {"SPY": "S&P 500 ETF", "QQQ": "Nasdaq-100 ETF"}
-stock_DARK_BLUE = "#0A1830"
+stock_DARK_BLUE = SHARED_NAVY
 stock_STOCK_COLOURS = [
     "#41DDB4",
     "#5BA8FF",
@@ -74,14 +62,10 @@ GLOBAL_PANELS = (1, 2, 3)
 # Colours follow the ticker rather than its position, so a company keeps its
 # colour as the selection changes. The default six and the two benchmarks keep
 # the colours they had before the toggle existed.
-stock_COLOUR_BY_TICKER = {
-    ticker: stock_STOCK_COLOURS[number]
-    for number, ticker in enumerate(
-        stock_DEFAULT_COMPANIES
-        + list(stock_BENCHMARKS)
-        + [t for t in GLOBAL_COMPANIES if t not in stock_DEFAULT_COMPANIES]
-    )
-}
+stock_COLOUR_BY_TICKER = dict(zip(
+    ["NVDA", "MSFT", "GOOGL", "AMZN", "META", "AMD", "SPY", "QQQ", "TSM", "ORCL", "PLTR", "ASML"],
+    [stock_STOCK_COLOURS[i] for i in [0, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 13]]
+))
 
 
 def stock_colour(ticker, position):
@@ -92,7 +76,7 @@ def stock_colour(ticker, position):
 
 
 def global_normalise_selection(values):
-    """Valid tickers only, without duplicates, in the canonical 12-company order."""
+    """Valid tickers only, without duplicates, in the canonical 10-company order."""
     chosen = {str(value).strip().upper() for value in (values or [])}
     return [ticker for ticker in GLOBAL_COMPANIES if ticker in chosen]
 
@@ -106,7 +90,7 @@ def global_parse_selection(search):
 
 
 def global_panel_url(panel, selection):
-    """Address of a full-size panel; panels 1-3 carry the header selection."""
+    """Address of a full-size panel carrying the header selection."""
     chosen = global_normalise_selection(selection)
     if panel in GLOBAL_PANELS:
         query = urlencode({"companies": ",".join(chosen)}, safe=",")
@@ -291,19 +275,19 @@ def stock_build_chart_3d(indexed_prices):
                 title="Date",
                 tickvals=days[tick_positions],
                 ticktext=dates[tick_positions].strftime("%b %Y"),
-                gridcolor="#35506D",
+                gridcolor=GRID,
                 backgroundcolor=stock_DARK_BLUE,
             ),
             yaxis=dict(
                 title="Company",
                 tickvals=list(range(len(indexed_prices.columns))),
                 ticktext=list(indexed_prices.columns),
-                gridcolor="#35506D",
+                gridcolor=GRID,
                 backgroundcolor=stock_DARK_BLUE,
             ),
             zaxis=dict(
                 title="Indexed Price (Base = 100)",
-                gridcolor="#35506D",
+                gridcolor=GRID,
                 backgroundcolor=stock_DARK_BLUE,
             ),
             bgcolor=stock_DARK_BLUE,
@@ -329,9 +313,27 @@ def stock_build_chart_3d(indexed_prices):
     return fig
 
 
+def stock_comparison_data(companies, period="3 Years", benchmarks=None):
+    """One real-price/normalisation path for both Panel 1 views.
+
+    Preserve the original lookback, adjusted closes and shared-date indexing.
+    """
+    tickers = list(dict.fromkeys(list(companies) + list(benchmarks or [])))
+    start = date.today() - timedelta(days=round(int(period.split()[0]) * 365.25))
+    prices = stock_get_prices(tickers, start.isoformat(), (date.today() + timedelta(days=1)).isoformat())
+    missing = [ticker for ticker in tickers if ticker not in prices or prices[ticker].isna().all()]
+    prices = prices.drop(columns=missing, errors="ignore")
+    if not any(ticker in prices for ticker in companies):
+        raise ValueError("No selected AI companies have available data.")
+    indexed = stock_index_and_normalise(prices)
+    if len(indexed) < 3:
+        raise ValueError("Not enough shared historical data to compare.")
+    return indexed, missing
+
+
 def p1_create_app(**kwargs):
     app = Dash(__name__, **kwargs, include_assets_files=False)
-    dropdown_style = {"color": "#0A1830"}
+    dropdown_style = {"color": "#0B1220"}
 
     def control(label, element):
         return html.Label([html.Div(label, style={"marginBottom": "8px"}), element])
@@ -343,19 +345,7 @@ def p1_create_app(**kwargs):
             html.P(
                 "How have AI-related companies performed relative to the wider stock market?"
             ),
-            control(
-                "AI Companies",
-                dcc.Dropdown(
-                    id="p1-companies",
-                    options=[
-                        {"label": f"{n} ({t})", "value": t}
-                        for t, n in stock_COMPANIES.items()
-                    ],
-                    value=stock_DEFAULT_COMPANIES,
-                    multi=True,
-                    style=dropdown_style,
-                ),
-            ),
+            dcc.Store(id="p1-companies", data=list(TICKERS)),
             html.Div(
                 [
                     control(
@@ -416,16 +406,17 @@ def p1_create_app(**kwargs):
     )
 
     @app.callback(
-        Output("p1-companies", "value"),
+        Output("p1-companies", "data"),
         Input("p1-url", "search"),
     )
     def use_header_selection(search):
         # Opened from the overview: start from the companies chosen in the header.
-        return global_parse_selection(search) or no_update
+        chosen = global_parse_selection(search)
+        return list(TICKERS) if chosen is None else chosen
 
     @app.callback(
         Output("p1-result", "children"),
-        Input("p1-companies", "value"),
+        Input("p1-companies", "data"),
         Input("p1-period", "value"),
         Input("p1-benchmarks", "value"),
         Input("p1-detail", "value"),
@@ -434,21 +425,8 @@ def p1_create_app(**kwargs):
     def update(companies, period, benchmarks, detail, _refresh):
         if not companies:
             return html.P("Please select at least one AI company.", role="status")
-        tickers = list(dict.fromkeys(companies + (benchmarks or [])))
-        start = date.today() - timedelta(days=round(int(period.split()[0]) * 365.25))
         try:
-            prices = stock_get_prices(
-                tickers,
-                start.isoformat(),
-                (date.today() + timedelta(days=1)).isoformat(),
-            )
-            missing = [t for t in tickers if t not in prices or prices[t].isna().all()]
-            prices = prices.drop(columns=missing, errors="ignore")
-            if not any((t in prices for t in companies)):
-                raise ValueError("No selected AI companies have available data.")
-            indexed = stock_index_and_normalise(prices)
-            if len(indexed) < 3:
-                raise ValueError("Not enough shared historical data to compare.")
+            indexed, missing = stock_comparison_data(companies, period, benchmarks)
             stats = stock_calculate_statistics(indexed)
             step = {"Daily": 1, "Every 5 Days": 5, "Every 20 Days": 20}[detail]
             sampled = indexed.iloc[::step]
@@ -469,7 +447,7 @@ def p1_create_app(**kwargs):
                             ),
                         ],
                         style={
-                            "background": "#102A45",
+                            "background": CARD,
                             "borderLeft": f"4px solid {colour}",
                             "borderRadius": "7px",
                             "padding": "12px",
@@ -516,8 +494,7 @@ def p1_create_app(**kwargs):
 
     return app
 
-# The same 12 companies as panels 1, 3 and 4 (this list used to hold TSLA in place
-# of CRM), so the header selection means the same thing in every panel.
+# The same ten-company universe across all panels.
 p2_tickers = list(stock_COMPANIES)
 p2_sector_map = {
     "NVDA": "Semiconductors",
@@ -525,13 +502,10 @@ p2_sector_map = {
     "GOOGL": "Software & Cloud",
     "AMZN": "Software & Cloud",
     "META": "Internet Services",
-    "AVGO": "Semiconductors",
     "AMD": "Semiconductors",
     "TSM": "Semiconductors",
     "ORCL": "Software & Cloud",
     "PLTR": "Software & Cloud",
-    "CRM": "Software & Cloud",
-    "TSLA": "Consumer & EV",
     "ASML": "Semiconductors",
 }
 
@@ -541,12 +515,10 @@ p2_sector_map = {
     "GOOGL": "Software & Cloud",
     "AMZN": "Software & Cloud",
     "META": "Internet Services",
-    "AVGO": "Semiconductors",
     "AMD": "Semiconductors",
     "TSM": "Semiconductors",
     "ORCL": "Software & Cloud",
     "PLTR": "Software & Cloud",
-    "TSLA": "Consumer & EV",
     "ASML": "Semiconductors",
 }
 p2_NUMERIC_COLS = ["Market Cap ($T)", "Capital Expenditure ($B)", "Annual Revenue ($B)"]
@@ -751,8 +723,8 @@ def p2_style_valuation_chart(fig):
 
     fig.update_layout(
         template='plotly_dark',
-        paper_bgcolor='#031A2F',
-        plot_bgcolor='#031A2F',
+        paper_bgcolor='#0B1220',
+        plot_bgcolor='#0B1220',
         margin=dict(r=300, t=170, l=80, b=70),
         title=dict(
             x=.5,
@@ -763,7 +735,7 @@ def p2_style_valuation_chart(fig):
             showline=True,
             linecolor='white',
             linewidth=2,
-            gridcolor='#243449',
+            gridcolor=GRID,
             griddash='dash',
             zeroline=False
         ),
@@ -773,7 +745,7 @@ def p2_style_valuation_chart(fig):
             showline=True,
             linecolor='white',
             linewidth=2,
-            gridcolor='#243449',
+            gridcolor=GRID,
             griddash='dash',
             zeroline=False,
             minor=dict(
@@ -1089,7 +1061,7 @@ def p2_build_valuation_chart(chart_df, regression):
 def p2_create_app(selected_tickers=p2_tickers, **kwargs):
     app = Dash(__name__, **kwargs, include_assets_files=False)
     tab_style = {
-        "backgroundColor": "#102D47",
+        "backgroundColor": CARD,
         "color": "white",
         "border": "1px solid #1E3A5F",
         "padding": "12px",
@@ -1097,7 +1069,7 @@ def p2_create_app(selected_tickers=p2_tickers, **kwargs):
     selected_tab_style = {
         **tab_style,
         "backgroundColor": "#FFFFFF",
-        "color": "#031A2F",
+        "color": "#0B1220",
         "fontWeight": "bold",
         "borderTop": "2px solid #00D4FF",
     }
@@ -1127,7 +1099,7 @@ def p2_create_app(selected_tickers=p2_tickers, **kwargs):
             dcc.Loading(html.Div(id="view-content")),
         ],
         style={
-            "backgroundColor": "#031A2F",
+            "backgroundColor": "#0B1220",
             "minHeight": "100vh",
             "margin": "0",
             "padding": "8px 0",
@@ -1143,10 +1115,12 @@ def p2_create_app(selected_tickers=p2_tickers, **kwargs):
         Input("p2-url", "search"),
     )
     def update_view(view, _refresh, search):
-        df, failed_tickers = p2_load_valuation_data(selected_tickers)
         chosen = global_parse_selection(search)
-        if chosen:
-            df = df[df["Ticker"].isin(chosen)]
+        chosen = list(TICKERS) if chosen is None else chosen
+        if not chosen:
+            return html.P("Please select at least one company in the universal selector.", role="status")
+        df, failed_tickers = p2_load_valuation_data(selected_tickers)
+        df = df[df["Ticker"].isin(chosen)]
         chart_df = p2_prepare_chart_data(df)
         if chart_df.empty:
             return html.P(
@@ -1223,14 +1197,14 @@ def p2_create_app(selected_tickers=p2_tickers, **kwargs):
                             "overflowX": "auto",
                         },
                         style_header={
-                            "backgroundColor": "#163954",
+                            "backgroundColor": CARD,
                             "color": "white",
                             "fontWeight": "bold",
                             "border": "1px solid #2D5474",
                             "padding": "15px",
                         },
                         style_cell={
-                            "backgroundColor": "#0B2943",
+                            "backgroundColor": CARD,
                             "color": "white",
                             "border": "1px solid #23445E",
                             "padding": "14px",
@@ -1239,7 +1213,7 @@ def p2_create_app(selected_tickers=p2_tickers, **kwargs):
                             "fontSize": "14px",
                         },
                         style_data_conditional=[
-                            {"if": {"row_index": "odd"}, "backgroundColor": "#102F49"}
+                            {"if": {"row_index": "odd"}, "backgroundColor": CARD}
                         ],
                     ),
                 ]
@@ -1248,11 +1222,11 @@ def p2_create_app(selected_tickers=p2_tickers, **kwargs):
     return app
 
 
-p4_NAVY = "#081423"
+p4_NAVY = SHARED_NAVY
 p4_CYAN = "#20e3e8"
 p4_WHITE = "#f3f5fa"
 p4_MUTED = "#aabed0"
-p4_LINE = "#354b60"
+p4_LINE = BORDER
 p4_BUTTON = {
     "backgroundColor": p4_LINE,
     "color": p4_WHITE,
@@ -1883,7 +1857,7 @@ TITLES = [
     "AI Boom vs. Dot-Com Bubble",
     "AI Valuation Simulator",
 ]
-NAVY = "#081423"
+NAVY = SHARED_NAVY
 WHITE = "#edf3fc"
 CYAN = "#5ce0d3"
 
@@ -1898,7 +1872,7 @@ def global_chip_style(selected):
         "fontWeight": 600,
         "letterSpacing": "0.5px",
         "borderRadius": "12px",
-        "border": f"1px solid {CYAN if selected else '#35455d'}",
+        "border": f"1px solid {CYAN if selected else '#263449'}",
         "backgroundColor": "#143137" if selected else "#0f1b2d",
         "color": CYAN if selected else "#9fb2c8",
         "cursor": "pointer",
@@ -1915,47 +1889,47 @@ def global_status(chosen):
 
 
 def compact_figure(figure, panel):
-    """Fit the original chart into its quadrant, with readable essential labels."""
+    """Fit each original chart to a responsive overview quadrant."""
     figure = go.Figure(figure)
-    figure.layout.title.text = ""
-    figure.update_layout(
-        autosize=True,
-        height=None,
-        width=None,
-        title=None,
-        margin=dict(l=60, r=35, t=35, b=45),
-        uirevision=f"overview-{panel}",
-    )
+    if panel == 4:
+        # Retain Panel 4's original preview styling and independent data.
+        figure.update_layout(autosize=True, height=None, width=None, title=None,
+                             margin=dict(l=60, r=65, t=10, b=45), uirevision="overview-4")
+        return figure
+    figure.update_layout(autosize=True, height=None, width=None, title=None,
+        paper_bgcolor=SHARED_NAVY, plot_bgcolor=SHARED_NAVY, font=dict(size=11),
+        margin=dict(l=55, r=24, t=38, b=48), uirevision=f"overview-{panel}")
     if panel == 1:
-        figure.update_layout(
-            margin=dict(l=0, r=0, t=4, b=45),
-            scene=dict(
-                domain=dict(x=[0, 0.96], y=[0.06, 1]),
-                camera=dict(eye=dict(x=2.0, y=-2.6, z=1.5)),
-            ),
-        )
+        figure.update_layout(margin=dict(l=0, r=0, t=30, b=8),
+            scene=dict(domain=dict(x=[0, 1], y=[0, 0.94]), camera=dict(eye=dict(x=1.4, y=-1.7, z=1.0))),
+            legend=dict(orientation="h", x=0.02, xanchor="left", y=1.02,
+                        yanchor="bottom", font=dict(size=9), bgcolor=SHARED_NAVY))
+        figure.update_scenes(xaxis_title_font_size=11, yaxis_title_font_size=11, zaxis_title_font_size=11,
+                             xaxis_tickfont_size=9, yaxis_tickfont_size=9, zaxis_tickfont_size=9)
     elif panel == 2:
+        # Keep the full-size panel's custom legends; native sector keys fit here.
         figure.layout.annotations = []
         figure.layout.shapes = []
         figure.layout.updatemenus = []
-        figure.update_layout(
-            annotations=[],
-            shapes=[],
-            updatemenus=[],
-            xaxis=dict(domain=[0, 1], range=[-25, 175]),
-            yaxis=dict(range=[-200, 1250]),
-        )
-
+        sectors = set()
         for trace in figure.data:
             if trace.type == "scatter" and trace.marker.sizeref:
                 trace.marker.sizeref *= 1.7
+                trace.showlegend = trace.name not in sectors
+                sectors.add(trace.name)
+            else:
+                trace.showlegend = False
+        figure.update_layout(showlegend=True, legend=dict(orientation="h", x=0, y=1.03, font=dict(size=9)))
+        figure.update_xaxes(domain=[0, 1], autorange=True, title_font_size=11, automargin=True)
+        figure.update_yaxes(autorange=True, title_font_size=11, automargin=True)
     elif panel == 3:
-        figure.update_layout(
-            margin=dict(l=55, r=100, t=40, b=45),
-            legend=dict(orientation="h", x=0, y=1.09, font=dict(size=10)),
-        )
-    elif panel == 4:
-        figure.update_layout(margin=dict(l=60, r=65, t=10, b=45))
+        # Compact overview keys only; full-size names and annotations stay intact.
+        for trace, label in zip(figure.data, ["NASDAQ · Dot-Com", "AI Portfolio", "Bull", "Base", "Bear"]):
+            trace.name = label
+        figure.update_layout(margin=dict(l=55, r=110, t=42, b=46),
+            legend=dict(orientation="h", x=0, y=1.04, yanchor="bottom", font=dict(size=9)))
+        figure.update_xaxes(title_font_size=11, tickfont_size=10)
+        figure.update_yaxes(title_font_size=11, tickfont_size=10)
     return figure
 
 
@@ -1980,8 +1954,7 @@ def message_figure(message):
 def overview_figure(panel, companies=None):
     """Reuse the original panel calculations and figures with their real data.
 
-    Panels 1-3 show the companies chosen in the header; panel 4 is a
-    single-company simulator and ignores the selection.
+    Panels 1-3 use the header selection; Panel 4 remains independent.
     """
     chosen = (
         list(stock_DEFAULT_COMPANIES)
@@ -1990,21 +1963,7 @@ def overview_figure(panel, companies=None):
     if panel in GLOBAL_PANELS and not chosen:
         return message_figure("Please select at least one company in the universal selector.")
     if panel == 1:
-        today = date.today()
-        prices = stock_get_prices(
-            list(stock_COMPANIES) + list(stock_BENCHMARKS),
-            (today - timedelta(days=round(3 * 365.25))).isoformat(),
-            (today + timedelta(days=1)).isoformat(),
-        )
-        if prices.empty:
-            raise ValueError("Yahoo Finance prices unavailable. Open panel to retry.")
-        prices = prices.dropna(axis=1, how="all")
-        if not any(ticker in prices.columns for ticker in chosen):
-            raise ValueError("No data for the selected companies. Open panel to retry.")
-        wanted = [t for t in chosen + list(stock_BENCHMARKS) if t in prices.columns]
-        indexed = stock_index_and_normalise(prices[wanted])
-        if len(indexed) < 3:
-            raise ValueError("Not enough shared price data. Open panel to retry.")
+        indexed, _missing = stock_comparison_data(chosen, "3 Years", list(stock_BENCHMARKS))
         sampled = indexed.iloc[::5]
         if sampled.index[-1] != indexed.index[-1]:
             sampled = pd.concat([sampled, indexed.iloc[[-1]]])
@@ -2045,12 +2004,13 @@ def create_app():
     p4_register_callbacks(fourth)
     panel_apps.append(fourth)
     for panel_app in panel_apps:
+        apply_theme(panel_app)
         panel_app.layout = html.Div(
             panel_app.layout,
             style={
                 "position": "absolute",
                 "inset": 0,
-                "backgroundColor": NAVY,
+                "backgroundColor": p4_NAVY if panel_app is fourth else NAVY,
                 "minHeight": "100vh",
                 "color": WHITE,
             },
@@ -2061,6 +2021,7 @@ def create_app():
         title="AI Boom • Four Graph Dashboard",
         include_assets_files=False,
     )
+    apply_theme(app)
     cards = []
     for number, title in enumerate(TITLES, 1):
         cards.append(
@@ -2080,7 +2041,7 @@ def create_app():
                             "padding": "0 12px",
                             "fontSize": "12px",
                             "fontWeight": 600,
-                            "backgroundColor": "#101e31",
+                            "backgroundColor": CARD,
                         },
                     ),
                     html.Div(
@@ -2121,6 +2082,7 @@ def create_app():
                     ),
                 ],
                 id=f"card-{number}",
+                className="overview-card",
                 style={
                     "position": "relative",
                     "minWidth": 0,
@@ -2131,12 +2093,12 @@ def create_app():
             )
         )
     grid_style = {
-        "height": "calc(100vh - 44px)",
+        "height": "calc(100vh - 52px)",
         "display": "grid",
         "gridTemplateColumns": "repeat(2,minmax(0,1fr))",
         "gridTemplateRows": "repeat(2,minmax(0,1fr))",
         "gap": "1px",
-        "backgroundColor": "#35455d",
+        "backgroundColor": "#263449",
     }
     chips = [
         html.Button(
@@ -2157,7 +2119,7 @@ def create_app():
                 style={"border": 0, "width": "100%", "height": "100%"},
             ),
             id=f"full-{i}",
-            style={"display": "none", "height": "calc(100vh - 44px)"},
+            style={"display": "none", "height": "calc(100vh - 52px)"},
         )
         for i in range(1, 5)
     ]
@@ -2184,7 +2146,7 @@ def create_app():
                                 title=(
                                     f"Pick any of the "
                                     f"{len(GLOBAL_COMPANIES)} companies. Applies to "
-                                    "panels 1-3 (panel 4 is a single-company simulator)."
+                                    "panels 1-3. Panel 4 has its own company selector."
                                 ),
                                 style={
                                     "color": "#7f93ad",
@@ -2200,11 +2162,13 @@ def create_app():
                                     "display": "flex",
                                     "gap": "6px",
                                     "alignItems": "center",
-                                    "minWidth": 0,
+                                    "minWidth": "140px",
                                     "overflowX": "auto",
                                     "scrollbarWidth": "none",
                                 },
                             ),
+                            html.Button("Select All", id="select-all", n_clicks=0, style={"whiteSpace": "nowrap"}),
+                            html.Button("Deselect All", id="deselect-all", n_clicks=0, style={"whiteSpace": "nowrap"}),
                             html.Span(
                                 global_status(list(stock_DEFAULT_COMPANIES)),
                                 id="selection-status",
@@ -2218,8 +2182,9 @@ def create_app():
                         style={
                             "display": "flex",
                             "alignItems": "center",
-                            "gap": "14px",
+                            "gap": "8px",
                             "minWidth": 0,
+                            "overflowX": "auto",
                         },
                     ),
                     html.Button(
@@ -2230,16 +2195,17 @@ def create_app():
                     ),
                 ],
                 style={
-                    "height": "44px",
-                    "padding": "0 16px",
+                    "height": "52px",
+                    "padding": "0 12px",
+                    "overflowX": "auto",
                     "display": "flex",
                     "alignItems": "center",
                     "justifyContent": "space-between",
                     "gap": "16px",
-                    "backgroundColor": "#0b1524",
+                    "backgroundColor": "#0B1220",
                 },
             ),
-            html.Div(cards, id="grid", style=grid_style),
+            html.Div(cards, id="grid", className="overview-grid", style=grid_style),
             *frames,
         ],
         style={
@@ -2254,12 +2220,17 @@ def create_app():
     @app.callback(
         Output("company-selection", "data"),
         *[Input(f"chip-{ticker}", "n_clicks") for ticker in GLOBAL_COMPANIES],
+        Input("select-all", "n_clicks"), Input("deselect-all", "n_clicks"),
         State("company-selection", "data"),
         prevent_initial_call=True,
     )
     def toggle_company(*args):
         *_clicks, current = args
         trigger = ctx.triggered_id
+        if trigger == "select-all":
+            return list(TICKERS)
+        if trigger == "deselect-all":
+            return []
         if not trigger or not str(trigger).startswith("chip-"):
             raise PreventUpdate
         ticker = str(trigger).split("-", 1)[1]
@@ -2355,7 +2326,7 @@ def create_app():
         full = [
             {
                 "display": "block" if selected == i else "none",
-                "height": "calc(100vh - 44px)",
+                "height": "calc(100vh - 52px)",
             }
             for i in range(1, 5)
         ]
