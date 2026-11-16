@@ -1957,7 +1957,7 @@ def compact_figure(figure, panel):
                 sectors.add(trace.name)
             else:
                 trace.showlegend = False
-        figure.update_layout(showlegend=True, legend=dict(orientation="h", x=0, y=1.03, font=dict(size=9)))
+        figure.update_layout(showlegend=False)
         figure.update_xaxes(domain=[0, 1], autorange=True, title_font_size=11, automargin=True)
         figure.update_yaxes(autorange=True, title_font_size=11, automargin=True)
     elif panel == 3:
@@ -2074,11 +2074,11 @@ def create_app():
                             title,
                         ],
                         style={
-                            "height": "30px",
-                            "lineHeight": "30px",
-                            "padding": "0 12px",
-                            "fontSize": "12px",
-                            "fontWeight": 600,
+                            "height": "36px",
+                            "lineHeight": "36px",
+                            "padding": "0 14px",
+                            "fontSize": "16px",
+                            "fontWeight": 700,
                             "backgroundColor": CARD,
                         },
                     ),
@@ -2095,7 +2095,7 @@ def create_app():
                         ),
                         style={
                             "position": "absolute",
-                            "top": "30px",
+                            "top": "36px",
                             "bottom": 0,
                             "left": 0,
                             "right": 0,
