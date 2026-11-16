@@ -1449,6 +1449,34 @@ def p4_heatmap_data(data, assumptions):
     ]
     return (growth, margins, results)
 
+def p4_scenario_options(selected="Base"):
+    descriptions = {"Bear": "Cautious", "Base": "Central", "Bull": "Optimistic"}
+    colours = {"Bear": "#ffb47d", "Base": p4_CYAN, "Bull": "#8ce6ae"}
+
+    return [
+        {
+            "value": name,
+            "label": html.Div([
+                html.Strong(
+                    f"{name} - {descriptions[name]}"
+                    + (" | SELECTED" if name == selected else "")
+                ),
+                html.Div(
+                    f'{values["growth"]}% growth / {values["margin"]}% margin',
+                    style={"fontSize": "13px", "marginTop": "5px"},
+                ),
+            ], style={
+                "padding": "11px 12px",
+                "borderRadius": "6px",
+                "border": f"2px solid {colours[name]}",
+                "backgroundColor": colours[name] if name == selected else p4_NAVY,
+                "color": p4_NAVY if name == selected else p4_WHITE,
+                "flex": "1",
+            }),
+        }
+        for name, values in p4_SCENARIOS.items()
+    ]
+
 
 def p4_create_layout():
     """Return Panel 4's layout for a standalone or shared Dash app."""
@@ -1503,15 +1531,22 @@ def p4_create_layout():
                                 )
                             ),
                             html.H3("Scenario"),
-                            dcc.RadioItems(
+                                                        dcc.RadioItems(
                                 id="panel4-scenario",
-                                options=list(p4_SCENARIOS),
+                                options=p4_scenario_options(),
                                 value="Base",
+                                style={"display": "grid", "gap": "6px"},
+                                inputStyle={
+                                    "accentColor": p4_CYAN,
+                                    "marginRight": "8px",
+                                },
                                 labelStyle={
-                                    "display": "inline-block",
-                                    "marginRight": "12px",
+                                    "display": "flex",
+                                    "alignItems": "center",
+                                    "cursor": "pointer",
                                 },
                             ),
+                            
                             html.Div(
                                 id="panel4-assumptions", style={"margin": "16px 0"}
                             ),
@@ -1533,10 +1568,10 @@ def p4_create_layout():
                                         style=p4_BUTTON,
                                     ),
                                 ],
-                                open=True,
+                               style={"display": "none"},
                             ),
                         ],
-                        style={"flex": "1 1 250px", "minWidth": "230px"},
+                    style={"flex": "0 1 290px", "minWidth": "230px"},
                     ),
                     html.Main(
                         [
@@ -1545,10 +1580,7 @@ def p4_create_layout():
                                     [
                                         html.Div(
                                             id="panel4-source",
-                                            style={
-                                                "color": p4_MUTED,
-                                                "fontSize": "13px",
-                                            },
+                                        style={"display": "none"},    
                                         ),
                                         html.Div(
                                             id="panel4-metrics",
@@ -1809,6 +1841,12 @@ def p4_render_results(data, scenario):
 
 def p4_register_callbacks(app):
     """Call once on the shared app after adding create_layout() to its layout."""
+    @app.callback(
+        Output("panel4-scenario", "options"),
+        Input("panel4-scenario", "value"),
+    )
+    def highlight_scenario(scenario):
+        return p4_scenario_options(scenario)
 
     @app.callback(
         Output("panel4-data", "data"),
