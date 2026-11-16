@@ -2548,7 +2548,10 @@ def compact_figure(figure, panel):
     if panel == 1:
         figure.update_layout(
             margin=dict(l=0, r=0, t=4, b=45),
-            scene=dict(domain=dict(x=[0, 0.96], y=[0.06, 1])),
+            scene=dict(
+                domain=dict(x=[0, 0.96], y=[0.06, 1]),
+                camera=dict(eye=dict(x=2.0, y=-2.6, z=1.5)),
+            ),
         )
     elif panel == 2:
         figure.layout.annotations = []
