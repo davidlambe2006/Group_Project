@@ -1,4 +1,4 @@
-"""Panel 4: self-contained Dash valuation simulator.
+﻿"""Panel 4: self-contained Dash valuation simulator.
 
 Install: python -m pip install dash plotly yfinance
 Run:     python panels/panel4_simulator.py
