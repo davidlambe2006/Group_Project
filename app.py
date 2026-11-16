@@ -2558,11 +2558,13 @@ def compact_figure(figure, panel):
             annotations=[],
             shapes=[],
             updatemenus=[],
-            xaxis=dict(domain=[0, 1]),
-            legend=dict(
-                orientation="h", x=0, y=1.08, font=dict(size=10), itemsizing="constant"
-            ),
+            xaxis=dict(domain=[0, 1], range=[-25, 175]),
+            yaxis=dict(range=[-200, 1250]),
         )
+
+        for trace in figure.data:
+            if trace.type == "scatter" and trace.marker.sizeref:
+                trace.marker.sizeref *= 1.7
     elif panel == 3:
         figure.update_layout(
             margin=dict(l=55, r=100, t=40, b=45),
