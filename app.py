@@ -31,6 +31,8 @@ from flask import Flask
 from dash import Dash, Input, Output, State, ctx, dcc, html, dash_table, no_update
 from dash.exceptions import PreventUpdate
 
+from panels.panel4_simulator import CYAN
+
 stock_COMPANIES = {
     "NVDA": "NVIDIA",
     "MSFT": "Microsoft",
@@ -2431,6 +2433,40 @@ WHITE = "#edf3fc"
 CYAN = "#5ce0d3"
 
 
+
+
+def global_chip_style(selected, full):
+    """One company toggle: cyan when picked, dimmed once all six are used."""
+    style = {
+        "padding": "3px 9px",
+        "fontSize": "11px",
+        "fontWeight": 600,
+        "letterSpacing": "0.5px",
+        "borderRadius": "12px",
+        "border": f"1px solid {CYAN if selected else '#35455d'}",
+        "backgroundColor": "#143137" if selected else "#0f1b2d",
+        "color": CYAN if selected else "#9fb2c8",
+        "cursor": "pointer",
+        "flex": "0 0 auto",
+    }
+    if full and not selected:
+        style.update(opacity=0.35, cursor="not-allowed")
+    return style
+
+
+def global_status(chosen):
+    """Counter beside the toggles: cyan when six are picked, amber while editing."""
+    count = len(chosen)
+    if count == GLOBAL_PICK_COUNT:
+        return html.Span(
+            f"{count} / {GLOBAL_PICK_COUNT} selected", style={"color": CYAN}
+        )
+    return html.Span(
+        f"{count} / {GLOBAL_PICK_COUNT} - pick {GLOBAL_PICK_COUNT - count} more",
+        style={"color": "#FBC56C"},
+    )
+
+
 def compact_figure(figure, panel):
     """Fit the original chart into its quadrant, with readable essential labels."""
     figure = go.Figure(figure)
@@ -2489,18 +2525,27 @@ def message_figure(message):
     return figure
 
 
-def overview_figure(panel):
-    """Reuse the original panel calculations and figures with their real data."""
+def overview_figure(panel, companies=None):
+    """Reuse the original panel calculations and figures with their real data.
+
+    Panels 1-3 show the companies chosen in the header; panel 4 is a
+    single-company simulator and ignores the selection.
+    """
+    chosen = global_normalise_selection(companies) or list(stock_DEFAULT_COMPANIES)
     if panel == 1:
         today = date.today()
         prices = stock_get_prices(
-            stock_DEFAULT_COMPANIES + ["SPY", "QQQ"],
+            list(stock_COMPANIES) + list(stock_BENCHMARKS),
             (today - timedelta(days=round(3 * 365.25))).isoformat(),
             (today + timedelta(days=1)).isoformat(),
         )
         if prices.empty:
             raise ValueError("Yahoo Finance prices unavailable. Open panel to retry.")
-        indexed = stock_index_and_normalise(prices.dropna(axis=1, how="all"))
+        prices = prices.dropna(axis=1, how="all")
+        if not any(ticker in prices.columns for ticker in chosen):
+            raise ValueError("No data for the selected companies. Open panel to retry.")
+        wanted = [t for t in chosen + list(stock_BENCHMARKS) if t in prices.columns]
+        indexed = stock_index_and_normalise(prices[wanted])
         if len(indexed) < 3:
             raise ValueError("Not enough shared price data. Open panel to retry.")
         sampled = indexed.iloc[::5]
@@ -2509,12 +2554,12 @@ def overview_figure(panel):
         figure = stock_build_chart_3d(sampled)
     elif panel == 2:
         data, failed = p2_load_valuation_data(p2_tickers)
-        cleaned = p2_prepare_chart_data(data)
+        cleaned = p2_prepare_chart_data(data[data["Ticker"].isin(chosen)])
         if cleaned.empty:
             raise ValueError("Yahoo Finance metrics unavailable. Open panel to retry.")
         figure = p2_build_valuation_chart(cleaned, p2_calculate_regression(cleaned))
     elif panel == 3:
-        figure = p3_render_panel3(p3_DEFAULT_AI_COMPANIES)
+        figure = p3_render_panel3(chosen)
     else:
         data = p4_load_company_data("NVIDIA")
         figure = p4_make_heatmap(data, p4_SCENARIOS["Base"])
@@ -2636,6 +2681,17 @@ def create_app():
         "gap": "1px",
         "backgroundColor": "#35455d",
     }
+    chips = [
+        html.Button(
+            ticker,
+            id=f"chip-{ticker}",
+            n_clicks=0,
+            title=f"{name} ({ticker})",
+            disabled=ticker not in stock_DEFAULT_COMPANIES,
+            style=global_chip_style(ticker in stock_DEFAULT_COMPANIES, True),
+        )
+        for ticker, name in stock_COMPANIES.items()
+    ]
     frames = [
         html.Div(
             html.Iframe(
@@ -2651,10 +2707,63 @@ def create_app():
     app.layout = html.Div(
         [
             dcc.Interval(id="load-data", interval=150, max_intervals=1),
+            dcc.Store(id="company-selection", data=list(stock_DEFAULT_COMPANIES)),
+            dcc.Store(id="applied-companies", data=list(stock_DEFAULT_COMPANIES)),
+            dcc.Store(id="current-panel", data=None),
             html.Div(
                 [
-                    html.Strong(
-                        "AI BOOM", style={"color": CYAN, "letterSpacing": "2px"}
+                    html.Div(
+                        [
+                            html.Strong(
+                                "AI BOOM",
+                                style={
+                                    "color": CYAN,
+                                    "letterSpacing": "2px",
+                                    "flex": "0 0 auto",
+                                },
+                            ),
+                            html.Span(
+                                "COMPANIES",
+                                title=(
+                                    f"Pick {GLOBAL_PICK_COUNT} of the "
+                                    f"{len(GLOBAL_COMPANIES)} companies. Applies to "
+                                    "panels 1-3 (panel 4 is a single-company simulator)."
+                                ),
+                                style={
+                                    "color": "#7f93ad",
+                                    "fontSize": "10px",
+                                    "letterSpacing": "1.5px",
+                                    "flex": "0 0 auto",
+                                },
+                            ),
+                            html.Div(
+                                chips,
+                                id="company-chips",
+                                style={
+                                    "display": "flex",
+                                    "gap": "6px",
+                                    "alignItems": "center",
+                                    "minWidth": 0,
+                                    "overflowX": "auto",
+                                    "scrollbarWidth": "none",
+                                },
+                            ),
+                            html.Span(
+                                global_status(list(stock_DEFAULT_COMPANIES)),
+                                id="selection-status",
+                                style={
+                                    "fontSize": "11px",
+                                    "whiteSpace": "nowrap",
+                                    "flex": "0 0 auto",
+                                },
+                            ),
+                        ],
+                        style={
+                            "display": "flex",
+                            "alignItems": "center",
+                            "gap": "14px",
+                            "minWidth": 0,
+                        },
                     ),
                     html.Button(
                         "← Return to overview",
@@ -2669,6 +2778,7 @@ def create_app():
                     "display": "flex",
                     "alignItems": "center",
                     "justifyContent": "space-between",
+                    "gap": "16px",
                     "backgroundColor": "#0b1524",
                 },
             ),
@@ -2684,16 +2794,67 @@ def create_app():
         },
     )
 
+    @app.callback(
+        Output("company-selection", "data"),
+        *[Input(f"chip-{ticker}", "n_clicks") for ticker in GLOBAL_COMPANIES],
+        State("company-selection", "data"),
+        prevent_initial_call=True,
+    )
+    def toggle_company(*args):
+        *_clicks, current = args
+        trigger = ctx.triggered_id
+        if not trigger or not str(trigger).startswith("chip-"):
+            raise PreventUpdate
+        ticker = str(trigger).split("-", 1)[1]
+        chosen = global_normalise_selection(current)
+        if ticker in chosen:
+            chosen.remove(ticker)
+        elif ticker in GLOBAL_COMPANIES and len(chosen) < GLOBAL_PICK_COUNT:
+            chosen.append(ticker)
+        else:
+            raise PreventUpdate
+        return global_normalise_selection(chosen)
+
+    @app.callback(
+        *[Output(f"chip-{ticker}", "style") for ticker in GLOBAL_COMPANIES],
+        *[Output(f"chip-{ticker}", "disabled") for ticker in GLOBAL_COMPANIES],
+        Output("selection-status", "children"),
+        Input("company-selection", "data"),
+    )
+    def show_selection(selection):
+        chosen = global_normalise_selection(selection)
+        full = len(chosen) >= GLOBAL_PICK_COUNT
+        return [
+            *[global_chip_style(t in chosen, full) for t in GLOBAL_COMPANIES],
+            *[full and t not in chosen for t in GLOBAL_COMPANIES],
+            global_status(chosen),
+        ]
+
+    @app.callback(
+        Output("applied-companies", "data"),
+        Input("company-selection", "data"),
+        prevent_initial_call=True,
+    )
+    def apply_selection(selection):
+        chosen = global_normalise_selection(selection)
+        if len(chosen) != GLOBAL_PICK_COUNT:
+            raise PreventUpdate
+        return chosen
+
     def register_preview(number):
+        uses_selection = number in GLOBAL_PANELS
+        inputs = [Input("load-data", "n_intervals")]
+        if uses_selection:
+            inputs.append(Input("applied-companies", "data"))
 
         @app.callback(
             Output(f"graph-{number}", "figure"),
-            Input("load-data", "n_intervals"),
+            *inputs,
             prevent_initial_call=True,
         )
-        def load(_count):
+        def load(_count, companies=None):
             try:
-                return overview_figure(number)
+                return overview_figure(number, companies)
             except Exception as error:
                 print(f"Panel {number}: {error}")
                 return message_figure("Data unavailable — open panel to retry")
@@ -2706,17 +2867,27 @@ def create_app():
         Output("back", "style"),
         *[Output(f"full-{i}", "style") for i in range(1, 5)],
         *[Output(f"frame-{i}", "src") for i in range(1, 5)],
+        Output("current-panel", "data"),
         *[Input(f"open-{i}", "n_clicks") for i in range(1, 5)],
         Input("back", "n_clicks"),
+        Input("applied-companies", "data"),
+        State("current-panel", "data"),
         prevent_initial_call=True,
     )
-    def navigate(*_clicks):
+    def navigate(*args):
+        *_clicks, applied, open_panel = args
         trigger = ctx.triggered_id
-        selected = (
-            int(trigger.split("-")[1])
-            if trigger and trigger.startswith("open-")
-            else None
-        )
+        chosen = global_normalise_selection(applied)
+        if trigger == "applied-companies":
+            if open_panel not in GLOBAL_PANELS:
+                raise PreventUpdate
+            selected = open_panel
+        else:
+            selected = (
+                int(trigger.split("-")[1])
+                if trigger and trigger.startswith("open-")
+                else None
+            )
         grid = {**grid_style, "display": "none" if selected else "grid"}
         back = {
             "display": "block" if selected else "none",
@@ -2734,8 +2905,12 @@ def create_app():
             }
             for i in range(1, 5)
         ]
-        sources = [f"/panel/{i}/" if selected == i else no_update for i in range(1, 5)]
-        return [grid, back, *full, *sources]
+        sources = [
+            global_panel_url(i, chosen) if selected == i else no_update
+            for i in range(1, 5)
+        ]
+        return [grid, back, *full, *sources, selected]
+    
 
     app.panel_apps = panel_apps
     return app
