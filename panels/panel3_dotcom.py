@@ -353,14 +353,15 @@ def render_panel3(selected_companies=None):
         ))
 
         fig.add_annotation(
-            x=forecast_x[-1],
+            x=forecast_x[-1] + 1.5,
             y=forecast_y[-1],
             text=f"<b>{name} {target_return:+.1%}</b>",
             # Keep labels separate from the data: no coloured connector lines.
             showarrow=False,
             xanchor="left",
-            xshift=10,
-            yshift={"Bull": 18, "Base": 0, "Bear": -18}[name],
+            yanchor="middle",
+            xshift=8,
+            yshift=0,
             bgcolor=NAVY,
             borderpad=5,
             font=dict(size=13, color=colour)
@@ -406,24 +407,24 @@ def render_panel3(selected_companies=None):
             )
         ),
 
-        
-            legend=dict(
-              orientation="h",
-              yanchor="bottom",
-              y=1.02,
-              xanchor="left",
-              x=0,
-              font=dict(size=15, color="#F1F5F9"),
-              itemsizing="constant",
-              itemwidth=40,
+        # Reserve the top margin for one horizontal row at desktop widths.
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.03,
+            xanchor="left",
+            x=0,
+            font=dict(size=11, color="#F1F5F9"),
+            itemsizing="constant",
+            itemwidth=30,
+            # Natural text widths avoid rounding/wrapping of five equal slots.
             tracegroupgap=0
-),
-
+        ),
 
         margin=dict(
             l=60,
-            r=115,
-            t=65,
+            r=40,
+            t=85,
             b=65
         ),
 
@@ -434,6 +435,8 @@ def render_panel3(selected_companies=None):
     )
 
     fig.update_xaxes(
+        # Add label space beyond every observed/forecast point; retain the y scale.
+        range=[0, max(float(nasdaq_x[-1]), float(forecast_x[-1])) + 16],
         showgrid=True,
         gridcolor="rgba(148,163,184,0.07)",
         automargin=True,
@@ -459,7 +462,9 @@ def render_panel3(selected_companies=None):
         "nasdaq_dd": float(nasdaq_dd),
         "ai_return": float(ai_return),
         "ai_dd": float(ai_dd),
-        "company_count": len(selected_companies)
+        "company_count": len(selected_companies),
+        "nasdaq_period": f"{nasdaq.index[0]:%d %b %Y} – {nasdaq.index[-1]:%d %b %Y}",
+        "ai_period": f"{ai.index[0]:%d %b %Y} – {ai.index[-1]:%d %b %Y}"
     })
 
     return fig
@@ -491,9 +496,15 @@ def nasdaq_crash_detail():
         ("Peak", peak_date, "left"),
         ("Trough", trough_date, "right")
     ]:
+        detail.add_trace(go.Scatter(
+            x=[date], y=[float(nasdaq.loc[date])], mode="markers",
+            marker=dict(size=8, color=BLUE if label == "Peak" else PINK,
+                        line=dict(color=NAVY, width=2)),
+            hoverinfo="skip", showlegend=False
+        ))
         detail.add_annotation(
             x=date, y=float(nasdaq.loc[date]),
-            text=f"<b>{label}</b> · {date:%d %b %Y}",
+            text=f"<b>{label}</b><br>{date:%d %b %Y}",
             showarrow=False, xanchor=anchor, yanchor="bottom", yshift=8,
             font=dict(size=12, color="#E2E8F0"), bgcolor=NAVY, borderpad=3
         )
@@ -509,8 +520,8 @@ def nasdaq_crash_detail():
     padding = float(crash.max() - crash.min()) * 0.15
     detail.update_layout(
         title=dict(
-            text=f"NASDAQ crash detail · Peak-to-trough drawdown {drawdown.min():.1%}",
-            font=dict(size=14), x=0.02
+            text="NASDAQ · Inside the dot-com crash",
+            font=dict(size=16, color="#F1F5F9"), x=0.02
         ),
         paper_bgcolor=NAVY, plot_bgcolor=NAVY,
         font=dict(family="Inter, Segoe UI, Arial, sans-serif", color="#CBD5E1", size=12),
@@ -528,7 +539,7 @@ def nasdaq_crash_detail():
     return detail
 
 
-def metric_card(label, value, colour):
+def metric_card(label, value, colour, date_range=None):
 
     return html.Div(
         [
@@ -550,14 +561,19 @@ def metric_card(label, value, colour):
                     "fontWeight": "600",
                     "fontVariantNumeric": "tabular-nums"
                 }
-            )
+            ),
+            html.Div(date_range, style={
+                "color": "#94A3B8", "fontSize": "12px",
+                "lineHeight": "1.6", "marginTop": "10px"
+            }) if date_range else None
         ],
         style={
             "backgroundColor": "#131F31",
-            "padding": "20px",
+            "padding": "clamp(16px, 2vw, 22px)",
             "border": "1px solid #263449",
             "borderRadius": "10px",
-            "flex": "1 1 180px",
+            "boxSizing": "border-box",
+            "flex": "1 1 210px",
             "minWidth": "0"
         }
     )
@@ -606,27 +622,29 @@ def panel3_layout(selected_companies=None):
                     metric_card(
                         "NASDAQ PRICE RETURN",
                         f"{metrics['nasdaq_return']:+.1f}%",
-                        GREEN if metrics['nasdaq_return'] >= 0 else PINK
+                        GREEN if metrics['nasdaq_return'] >= 0 else PINK,
+                        metrics['nasdaq_period']
                     ),
                     metric_card(
                         "NASDAQ MAX DRAWDOWN",
                         f"{metrics['nasdaq_dd']:.1f}%",
-                        PINK
+                        PINK, metrics['nasdaq_period']
                     ),
                     metric_card(
                         "AI PORTFOLIO RETURN",
                         f"{metrics['ai_return']:+.1f}%",
-                        GREEN if metrics['ai_return'] >= 0 else PINK
+                        GREEN if metrics['ai_return'] >= 0 else PINK,
+                        metrics['ai_period']
                     ),
                     metric_card(
                         "AI MAX DRAWDOWN",
                         f"{metrics['ai_dd']:.1f}%",
-                        PINK
+                        PINK, metrics['ai_period']
                     )
                 ],
                 style={
                     "display": "flex",
-                    "gap": "12px",
+                    "gap": "16px",
                     "flexWrap": "wrap",
                     "marginBottom": "16px"
                 }
@@ -644,7 +662,7 @@ def panel3_layout(selected_companies=None):
                 },
                 # An explicit container height survives Dash's responsive resizing.
                 responsive=True,
-                style={"width": "100%", "minWidth": "0", "height": "740px"}
+                style={"width": "100%", "minWidth": "0", "height": "clamp(580px, 65vw, 740px)"}
             ),
 
             dcc.Graph(
@@ -720,7 +738,7 @@ if __name__ == "__main__":
                 style={
                     "marginBottom": "20px",
                     "width": "100%",
-                    "maxWidth": "1000px",
+                        "maxWidth": "1400px",
                     # Dash 4 styles its trigger and popup using theme variables.
                     "--Dash-Fill-Inverse-Strong": NAVY,
                     "--Dash-Fill-Interactive-Strong": CYAN,
@@ -776,5 +794,4 @@ if __name__ == "__main__":
             )
 
         return panel3_layout(selected_companies)
-
-    app.run(debug=False)
+    app.run(debug=True)  
