@@ -5,8 +5,8 @@ import yfinance as yf
 import plotly.graph_objects as go
 
 from functools import lru_cache
-from pathlib import Path
-from dash import Dash, dcc, html, Input, Output, ctx
+from urllib.parse import parse_qs
+from dash import Dash, dcc, html, Input, Output
 
 
 # All 12 companies, selected by default
@@ -584,6 +584,12 @@ def panel3_layout(selected_companies=None):
     if selected_companies is None:
         selected_companies = DEFAULT_AI_COMPANIES
 
+    if not selected_companies:
+        return html.P(
+            "Please select at least one company in the universal selector.",
+            role="status", style={"color": "white"}
+        )
+
     try:
         fig = render_panel3(selected_companies)
         crash_detail = nasdaq_crash_detail()
@@ -699,63 +705,29 @@ def panel3_layout(selected_companies=None):
 
 
 # ---------------------------------------
-# 8. STANDALONE DASH TEST
+# 8. DASHBOARD INTEGRATION
 # ---------------------------------------
 
-if __name__ == "__main__":
+def selection_from_search(search):
+    """Read the universal selector's iframe URL; preserve an explicit empty list."""
+    query = parse_qs((search or "").lstrip("?"), keep_blank_values=True)
+    if "companies" not in query:
+        return list(DEFAULT_AI_COMPANIES)
+    return list(dict.fromkeys(
+        ticker.strip().upper()
+        for value in query["companies"]
+        for ticker in value.split(",")
+        if ticker.strip()
+    ))
 
-    app = Dash(__name__, assets_folder=str(Path(__file__).parent / "panel3_assets"))
 
+def create_app(**kwargs):
+    """Mount under /panel/3/ using the host dashboard's companies query string."""
+    app = Dash(__name__, include_assets_files=False, **kwargs)
     app.layout = html.Div(
         [
-            html.Div(
-                [
-                    html.Label(
-                        "AI Companies",
-                        htmlFor="global-company-selector",
-                        style={"color": "#CBD5E1"}
-                    ),
-                    html.Span(id="panel3-selection-count", className="panel3-selection-count"),
-                    html.Div([
-                        html.Button("Select All", id="panel3-select-all", n_clicks=0),
-                        html.Button("Deselect All", id="panel3-deselect-all", n_clicks=0)
-                    ], className="panel3-selection-actions"),
-
-                    dcc.Dropdown(
-                        id="global-company-selector",
-                        options=[
-                            {"label": ticker, "value": ticker}
-                            for ticker in DEFAULT_AI_COMPANIES
-                        ],
-                        value=list(DEFAULT_AI_COMPANIES),
-                        multi=True,
-                        placeholder="Search companies…",
-                        className="panel3-company-select",
-                        style={"backgroundColor": NAVY, "color": "#F1F5F9"}
-                    )
-                ],
-                className="panel3-selector",
-                style={
-                    "marginBottom": "20px",
-                    "width": "100%",
-                        "maxWidth": "1400px",
-                    # Dash 4 styles its trigger and popup using theme variables.
-                    "--Dash-Fill-Inverse-Strong": NAVY,
-                    "--Dash-Fill-Interactive-Strong": CYAN,
-                    "--Dash-Fill-Interactive-Weak": "#153343",
-                    "--Dash-Fill-Primary-Hover": "#1E334B",
-                    "--Dash-Fill-Primary-Active": "#153343",
-                    "--Dash-Fill-Disabled": "#263449",
-                    "--Dash-Stroke-Strong": "#334155",
-                    "--Dash-Stroke-Weak": "#263449",
-                    "--Dash-Text-Primary": "#F1F5F9",
-                    "--Dash-Text-Strong": "#F1F5F9",
-                    "--Dash-Text-Weak": "#CBD5E1",
-                    "--Dash-Text-Disabled": "#94A3B8"
-                }
-            ),
-
-            html.Div(id="panel3-content")
+            dcc.Location(id="panel3-url", refresh=False),
+            dcc.Loading(html.Div(id="panel3-content"))
         ],
         style={
             "backgroundColor": "#080F1C",
@@ -766,32 +738,16 @@ if __name__ == "__main__":
     )
 
     @app.callback(
-        Output("global-company-selector", "value"),
-        Input("panel3-select-all", "n_clicks"),
-        Input("panel3-deselect-all", "n_clicks"),
-        prevent_initial_call=True
-    )
-    def select_companies(select_clicks, deselect_clicks):
-        return list(DEFAULT_AI_COMPANIES) if ctx.triggered_id == "panel3-select-all" else []
-
-    @app.callback(
-        Output("panel3-selection-count", "children"),
-        Input("global-company-selector", "value")
-    )
-    def selection_count(selected_companies):
-        return f"{len(selected_companies or [])} / {len(DEFAULT_AI_COMPANIES)} selected"
-
-    @app.callback(
         Output("panel3-content", "children"),
-        Input("global-company-selector", "value")
+        Input("panel3-url", "search")
     )
-    def update_panel(selected_companies):
+    def update_panel(search):
+        # Failed Yahoo requests raise ValueError and are not cached. Reloading
+        # or changing the universal selection retries through panel3_layout.
+        return panel3_layout(selection_from_search(search))
 
-        if not selected_companies:
-            return html.P(
-                "Please select at least one company.",
-                style={"color": "white"}
-            )
+    return app
 
-        return panel3_layout(selected_companies)
-    app.run(debug=True)  
+
+if __name__ == "__main__":
+    create_app().run(debug=True)
