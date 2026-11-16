@@ -231,7 +231,7 @@ def create_layout():
             ], style={"flex": "0 1 290px", "minWidth": "230px"}),
             html.Main([
                 dcc.Loading(html.Div([
-                    html.Div(id="panel4-source", style={"color": MUTED, "fontSize": "13px"}),
+                    html.Div(id="panel4-source", style={"display": "none"}),
                     html.Div(id="panel4-metrics", style={"display": "flex", "flexWrap": "wrap",
                                                           "gap": "12px", "margin": "18px 0"}),
                     html.H3("Annual return sensitivity"),
