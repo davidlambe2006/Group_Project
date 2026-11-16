@@ -753,7 +753,7 @@ def p2_style_valuation_chart(fig):
         template='plotly_dark',
         paper_bgcolor='#031A2F',
         plot_bgcolor='#031A2F',
-        margin=dict(r=250, t=170),
+        margin=dict(r=300, t=170, l=80, b=70),
         title=dict(
             x=.5,
             font=dict(size=24, weight='bold')
@@ -786,14 +786,7 @@ def p2_style_valuation_chart(fig):
             font_color='white',
             bordercolor='#00D4FF'
         ),
-        legend=dict(
-            title='<b>Sector</b>',
-            x=1.02,
-            y=1.08,
-            bgcolor='#061426',
-            bordercolor='#1E3A5F',
-            borderwidth=2
-        )
+        showlegend=False
     )
 
     # Subtitle
@@ -818,6 +811,76 @@ def p2_style_valuation_chart(fig):
 
     return fig
 
+
+# Add custom sector legend
+def p2_add_sector_legend(fig, chart_df):
+    """Draw a cleaner custom sector legend."""
+
+    # Background box
+    fig.add_shape(
+        type='rect',
+        xref='paper', yref='paper',
+        x0=1.02, x1=1.20,
+        y0=0.77, y1=1.04,
+        line=dict(color='#1E3A5F', width=2),
+        fillcolor='#061426'
+    )
+
+    # Heading
+    fig.add_annotation(
+        x=1.11, y=0.995,
+        xref='paper', yref='paper',
+        xanchor='center',
+        yanchor='middle',
+        text='<b>Sector</b>',
+        showarrow=False,
+        font=dict(size=14, color='white')
+    )
+
+    sector_colours = {
+        'Semiconductors': '#00D4FF',
+        'Software & Cloud': '#FF6B6B',
+        'Internet Services': '#00E09F',
+        'Consumer & EV': '#B477FF'
+    }
+
+    # Only show sectors actually present
+    sectors = [
+        sector for sector in sector_colours
+        if sector in chart_df['Sector'].values
+    ]
+
+    # Tighter, cleaner spacing
+    y_positions = [0.925, 0.865, 0.805, 0.785]
+
+    for sector, y in zip(sectors, y_positions):
+        # coloured circle
+        fig.add_shape(
+            type='circle',
+            xref='paper', yref='paper',
+            xsizemode='pixel',
+            ysizemode='pixel',
+            xanchor=1.055,
+            yanchor=y,
+            x0=-7, x1=7,
+            y0=-7, y1=7,
+            line=dict(color='white', width=2),
+            fillcolor=sector_colours[sector]
+        )
+
+        # label
+        fig.add_annotation(
+            x=1.08, y=y,
+            xref='paper', yref='paper',
+            xanchor='left',
+            yanchor='middle',
+            text=sector,
+            showarrow=False,
+            font=dict(size=11, color='white')
+        )
+
+    return fig
+
 # Add market capitalisation legend
 def p2_add_market_cap_legend(fig, chart_df, size_max):
     """Draw the custom reference legend for bubble sizes."""
@@ -827,14 +890,14 @@ def p2_add_market_cap_legend(fig, chart_df, size_max):
         type='rect',
         xref='paper', yref='paper',
         x0=1.02, x1=1.20,
-        y0=0.32, y1=0.75,
+        y0=0.34, y1=0.75,
         line=dict(color='#1E3A5F', width=2),
         fillcolor='#061426'
     )
 
     # Legend heading
     fig.add_annotation(
-        x=1.105, y=0.725,
+        x=1.11, y=0.70,
         xanchor='center',
         xref='paper', yref='paper',
         text='<b>Market Cap ($T)</b>',
@@ -846,11 +909,11 @@ def p2_add_market_cap_legend(fig, chart_df, size_max):
     max_cap = chart_df['Market Cap ($T)'].max()
 
     for cap, y in [
-        (0.5, 0.63),
-        (1.0, 0.525),
-        (2.0, 0.395)
+        (0.5, 0.61),
+        (1.0, 0.515),
+        (2.0, 0.405)
     ]:
-        size = size_max * np.sqrt(cap / max_cap)
+        size = size_max * 0.65 * np.sqrt(cap / max_cap)
 
         # Draw reference bubble
         fig.add_shape(
@@ -1010,6 +1073,9 @@ def p2_build_valuation_chart(chart_df, regression):
 
     # Apply chart styling
     fig = p2_style_valuation_chart(fig)
+
+    # Add custom sector legend
+    fig = p2_add_sector_legend(fig, chart_df)
 
     # Add market cap bubble-size legend
     fig = p2_add_market_cap_legend(fig, chart_df, size_max)
@@ -1863,7 +1929,10 @@ def compact_figure(figure, panel):
     if panel == 1:
         figure.update_layout(
             margin=dict(l=0, r=0, t=4, b=45),
-            scene=dict(domain=dict(x=[0, 0.96], y=[0.06, 1])),
+            scene=dict(
+                domain=dict(x=[0, 0.96], y=[0.06, 1]),
+                camera=dict(eye=dict(x=2.0, y=-2.6, z=1.5)),
+            ),
         )
     elif panel == 2:
         figure.layout.annotations = []
@@ -1873,11 +1942,13 @@ def compact_figure(figure, panel):
             annotations=[],
             shapes=[],
             updatemenus=[],
-            xaxis=dict(domain=[0, 1]),
-            legend=dict(
-                orientation="h", x=0, y=1.08, font=dict(size=10), itemsizing="constant"
-            ),
+            xaxis=dict(domain=[0, 1], range=[-25, 175]),
+            yaxis=dict(range=[-200, 1250]),
         )
+
+        for trace in figure.data:
+            if trace.type == "scatter" and trace.marker.sizeref:
+                trace.marker.sizeref *= 1.7
     elif panel == 3:
         figure.update_layout(
             margin=dict(l=55, r=100, t=40, b=45),
