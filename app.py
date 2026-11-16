@@ -690,10 +690,9 @@ def p2_create_bubble_scatter(chart_df, size_max):
         textposition='middle center',
         selector=dict(mode='markers+text')
     )
-    
     return fig
 
-    # Add regression line
+# Add regression line
 def p2_add_regression_line(fig, slope, intercept, x):
     """Add the fitted regression line when sufficient data exists."""
 
@@ -725,7 +724,7 @@ def p2_style_valuation_chart(fig):
         template='plotly_dark',
         paper_bgcolor='#0B1220',
         plot_bgcolor='#0B1220',
-        margin=dict(r=300, t=170, l=80, b=70),
+        margin=dict(r=300, t=145, l=80, b=70),
         title=dict(
             x=.5,
             font=dict(size=24, weight='bold')
@@ -1030,8 +1029,164 @@ def p2_add_regression_controls(fig, r_squared):
 
     return fig
 
+
+def p2_add_small_company_inset(fig, chart_df):
+    """Zoomed comparison using the same financial data as the main chart."""
+
+    tickers = ["NVDA", "AMD", "ASML", "PLTR"]
+    small = chart_df[chart_df["Ticker"].isin(tickers)].copy()
+
+    if small.empty:
+        return fig
+
+    colours = {
+        "Semiconductors": "#00D4FF",
+        "Software & Cloud": "#FF6B6B",
+        "Internet Services": "#00E09F"
+    }
+
+    x_col = "Capital Expenditure ($B)"
+    y_col = "Annual Revenue ($B)"
+    cap_col = "Market Cap ($T)"
+
+    # Inset axes and positioning
+
+    # Inset axes and positioning
+    fig.update_layout(
+        xaxis2=dict(
+            domain=[0.17, 0.45],
+            anchor="y2",
+            range=[-0.6, max(8, small[x_col].max() * 1.35)],
+            title=dict(
+                text="CapEx ($B)",
+                font=dict(size=10),
+                standoff=2
+            ),
+            tickfont=dict(size=10),
+            gridcolor="#1E3A5F",
+            showline=True,
+            linecolor="white",
+            zeroline=False,
+            automargin=False
+        ),
+        yaxis2=dict(
+            domain=[0.66, 0.88],
+            anchor="x2",
+            range=[-25, max(100, small[y_col].max() * 1.6)],
+            title=dict(
+                text="Revenue ($B)",
+                font=dict(size=10),
+                standoff=2
+            ),
+            tickfont=dict(size=10),
+            gridcolor="#1E3A5F",
+            showline=True,
+            linecolor="white",
+            zeroline=False,
+            automargin=False
+        )
+    )
+
+    # Background and turquoise border
+    fig.add_shape(
+        type="rect",
+        xref="paper",
+        yref="paper",
+        x0=0.10,
+        x1=0.50,
+        y0=0.55,
+        y1=0.99,
+        fillcolor="#061426",
+        line=dict(color="#00D4FF", width=2),
+        layer="below"
+    )
+
+    # Title inside the inset
+    fig.add_annotation(
+        x=0.30,
+        y=0.955,
+        xref="paper",
+        yref="paper",
+        xanchor="center",
+        yanchor="middle",
+        align="center",
+        text="<b>COMPANIES CLUSTER ZOOMED IN</b>",
+        showarrow=False,
+        font=dict(size=12, color="white")
+    )
+
+    # Scale bubble AREA by market capitalisation
+    max_cap = small[cap_col].max()
+    sizeref = 2 * max_cap / (46 ** 2)
+
+    label_offsets = {
+        "NVDA": (48, 0),
+        "AMD": (0, -45),
+        "ASML": (48, -22),
+        "PLTR": (0, -25)
+    }
+
+    for _, row in small.iterrows():
+        ticker = row["Ticker"]
+        x = float(row[x_col])
+        y = float(row[y_col])
+        cap = float(row[cap_col])
+
+        # Actual bubble, using proportional market cap
+        fig.add_trace(
+            go.Scatter(
+                x=[x],
+                y=[y],
+                xaxis="x2",
+                yaxis="y2",
+                mode="markers",
+                marker=dict(
+                    size=[cap],
+                    sizemode="area",
+                    sizeref=sizeref,
+                    sizemin=9,
+                    color=colours.get(row["Sector"], "white"),
+                    line=dict(color="white", width=2),
+                    opacity=1
+                ),
+                name=ticker,
+                showlegend=False,
+                customdata=[[cap]],
+                hovertemplate=(
+                    "<b>" + ticker + "</b><br>"
+                    "CapEx: $%{x:.2f}B<br>"
+                    "Revenue: $%{y:.2f}B<br>"
+                    "Market Cap: $%{customdata[0]:.2f}T"
+                    "<extra></extra>"
+                )
+            )
+        )
+
+        # Separate labels with subtle connector lines
+        ax, ay = label_offsets.get(ticker, (0, -25))
+
+        fig.add_annotation(
+            x=x,
+            y=y,
+            xref="x2",
+            yref="y2",
+            text="<b>" + ticker + "</b>",
+            showarrow=True,
+            ax=ax,
+            ay=ay,
+            arrowhead=0,
+            arrowwidth=1,
+            arrowcolor="#8CA5C0",
+            bgcolor="#061426",
+            borderpad=2,
+            font=dict(size=11, color="white")
+        )
+
+    return fig
+
+
 # Main function - combine all chart components
-def p2_build_valuation_chart(chart_df, regression):
+def p2_build_valuation_chart(chart_df, regression, show_inset=False):
     """Build the complete interactive valuation chart."""
 
     slope, intercept, r_squared, x = regression
@@ -1054,6 +1209,10 @@ def p2_build_valuation_chart(chart_df, regression):
 
     # Add regression information and toggle
     fig = p2_add_regression_controls(fig, r_squared)
+
+    # Only add zoom inset to the expanded Panel 2
+    if show_inset:
+        fig = p2_add_small_company_inset(fig, chart_df)
 
     return fig
 
@@ -1135,7 +1294,7 @@ def p2_create_app(selected_tickers=p2_tickers, **kwargs):
             print("Insufficient valid data or variation to calculate regression.")
         else:
             print(f"R-squared: {regression[2]:.6f}")
-        fig = p2_build_valuation_chart(chart_df, regression)
+        fig = p2_build_valuation_chart(chart_df, regression, show_inset=True)
         table_df = chart_df[
             [
                 "Ticker",
@@ -1160,7 +1319,11 @@ def p2_create_app(selected_tickers=p2_tickers, **kwargs):
                     dcc.Graph(
                         figure=fig,
                         style={"width": "100%", "height": "calc(100vh - 30px)"},
-                        config={"responsive": True},
+                        config={
+                            "responsive": True,
+                            "displayModeBar": False,
+                            "displaylogo": False
+                        },
                     ),
                 ]
             )
@@ -1945,10 +2108,11 @@ def compact_figure(figure, panel):
         figure.update_scenes(xaxis_title_font_size=11, yaxis_title_font_size=11, zaxis_title_font_size=11,
                              xaxis_tickfont_size=9, yaxis_tickfont_size=9, zaxis_tickfont_size=9)
     elif panel == 2:
-        # Keep the full-size panel's custom legends; native sector keys fit here.
+        # Remove expanded-panel annotations and custom legend boxes
         figure.layout.annotations = []
         figure.layout.shapes = []
         figure.layout.updatemenus = []
+        
         sectors = set()
         for trace in figure.data:
             if trace.type == "scatter" and trace.marker.sizeref:
@@ -1959,7 +2123,15 @@ def compact_figure(figure, panel):
                 trace.showlegend = False
         figure.update_layout(showlegend=False)
         figure.update_xaxes(domain=[0, 1], autorange=True, title_font_size=11, automargin=True)
-        figure.update_yaxes(autorange=True, title_font_size=11, automargin=True)
+        figure.update_yaxes(
+             autorange=True,
+             tickmode="linear",
+             tick0=0,
+             dtick=250,
+             title_font_size=11,
+             tickfont_size=11,
+             automargin=True
+        )
     elif panel == 3:
         # Compact overview keys only; full-size names and annotations stay intact.
         for trace, label in zip(figure.data, ["NASDAQ · Dot-Com", "AI Portfolio", "Bull", "Base", "Bear"]):
