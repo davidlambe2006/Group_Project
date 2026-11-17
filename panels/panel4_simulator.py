@@ -277,7 +277,7 @@ def make_heatmap(data, assumptions):
     figure.update_layout(
         paper_bgcolor=NAVY, plot_bgcolor=NAVY, font={"color": WHITE},
         margin={"l": 65, "r": 30, "t": 20, "b": 65},
-        xaxis_title="Revenue growth (%)", yaxis_title="Net profit margin (%)",
+        xaxis_title="<b>Revenue growth (%)</b>", yaxis_title="<b>Net profit margin (%)</b>",
     )
     if not data:
         figure.add_annotation(text="Select a company or refresh Yahoo data", showarrow=False,
@@ -298,15 +298,44 @@ def make_heatmap(data, assumptions):
         colorbar={"title": "Return %", "ticksuffix": "%"},
         hovertemplate="%{hovertext}<br>Annual return: %{z:.1f}%<br>Future price: $%{customdata:,.2f}<extra></extra>",
     ))
-    figure.update_xaxes(tickmode="array", tickvals=list(range(len(growth))), ticktext=growth)
-    figure.update_yaxes(tickmode="array", tickvals=list(range(len(margins))), ticktext=margins)
+    axis_style = dict(
+        showline=True,
+        linecolor=WHITE,
+        linewidth=2,
+        ticks="outside",
+        tickcolor=WHITE,
+        ticklen=6,
+        tickfont=dict(size=14, color=WHITE),
+        title_font=dict(size=16, color=WHITE),
+        title_standoff=14,
+        automargin=True,
+        showgrid=False,
+        zeroline=False,
+    )
+    figure.update_xaxes(
+        tickmode="array",
+        tickvals=list(range(len(growth))),
+        ticktext=[f"{g}%" for g in growth],
+        **axis_style,
+    )
+    figure.update_yaxes(
+        tickmode="array",
+        tickvals=list(range(len(margins))),
+        ticktext=[f"{m}%" for m in margins],
+        **axis_style,
+    )
     for scenario, dash in [(SCENARIOS["Base"], "solid"), (assumptions, "dash")]:
         if dash == "dash" and scenario == SCENARIOS["Base"]:
             continue
         x, y = growth.index(scenario["growth"]), margins.index(scenario["margin"])
-        figure.add_shape(type="rect", x0=x-.47, x1=x+.47, y0=y-.47, y1=y+.47,
-                         line={"color": WHITE if dash == "solid" else NAVY,
-                               "width": 3, "dash": dash})
+        figure.add_shape(
+             type="rect",
+            x0=x-.47, x1=x+.47,
+            y0=y-.47, y1=y+.47,
+            line={"color": NAVY, "width": 4, "dash": dash},
+            fillcolor="rgba(0,0,0,0)",
+            layer="above",
+        )
     return figure
 
 
