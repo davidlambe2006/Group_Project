@@ -22,6 +22,8 @@ from datetime import date, datetime, timedelta, timezone
 from functools import wraps
 from math import isfinite
 from urllib.parse import parse_qs, urlencode
+import dash
+from matplotlib.pyplot import figure
 import numpy as np
 import pandas as pd
 import plotly.express as px
@@ -1409,16 +1411,13 @@ p4_COMPANIES = {
     "Alphabet": "GOOGL",
     "Amazon": "AMZN",
     "Meta": "META",
-    "Broadcom": "AVGO",
     "AMD": "AMD",
     "TSMC": "TSM",
     "Oracle": "ORCL",
     "Palantir": "PLTR",
-    "Salesforce": "CRM",
     "ASML": "ASML",
 }
 p4__cache = {}
-
 
 def p4_positive_number(value, label):
     try:
@@ -1652,7 +1651,14 @@ def p4_create_layout():
                                 options=list(p4_COMPANIES),
                                 value="NVIDIA",
                                 clearable=False,
-                                style={"color": p4_NAVY},
+                                style={
+                                    "color": p4_WHITE,
+                                    "--Dash-Fill-Inverse-Strong": p4_NAVY,
+                                    "--Dash-Text-Strong": p4_WHITE,
+                                    "--Dash-Text-Weak": p4_MUTED,
+                                    "--Dash-Stroke-Strong": p4_LINE,
+                                    "--Dash-Fill-Interactive-Strong": p4_CYAN,
+                                },
                             ),
                             html.Button(
                                 "Refresh Yahoo data",
@@ -1736,11 +1742,25 @@ def p4_create_layout():
                                                 "fontSize": "13px",
                                             },
                                         ),
+                                                                                html.Button(
+                                            "Reset view",
+                                            id="panel4-reset-view",
+                                            n_clicks=0,
+                                            style={**p4_BUTTON, "margin": "0 0 8px"},
+                                        ),
                                         dcc.Graph(
                                             id="panel4-heatmap",
-                                            config={"displayModeBar": False},
+                                            config={
+                                                "displayModeBar": True,
+                                                "displaylogo": False,
+                                                "modeBarButtons": [
+                                                    ["zoomIn2d", "zoomOut2d", "resetScale2d"]
+                                                ],
+                                                "doubleClick": "reset",
+                                            },
                                             style={"height": "480px"},
                                         ),
+                                        
                                         html.Details(
                                             [
                                                 html.Summary("Compare scenarios"),
@@ -1792,8 +1812,8 @@ def p4_make_heatmap(data, assumptions):
         plot_bgcolor=p4_NAVY,
         font={"color": p4_WHITE},
         margin={"l": 65, "r": 30, "t": 20, "b": 65},
-        xaxis_title="Revenue growth (%)",
-        yaxis_title="Net profit margin (%)",
+        xaxis_title="<b>Revenue growth (%)</b>",
+        yaxis_title="<b>Net profit margin (%)</b>",
     )
     if not data:
         figure.add_annotation(
@@ -1829,11 +1849,31 @@ def p4_make_heatmap(data, assumptions):
             hovertemplate="%{hovertext}<br>Annual return: %{z:.1f}%<br>Future price: $%{customdata:,.2f}<extra></extra>",
         )
     )
+    axis_style = dict(
+        showline=True,
+        linecolor=p4_WHITE,
+        linewidth=2,
+        ticks="outside",
+        tickcolor=p4_WHITE,
+        ticklen=6,
+        tickfont=dict(size=14, color=p4_WHITE),
+        title_font=dict(size=16, color=p4_WHITE),
+        title_standoff=14,
+        automargin=True,
+        showgrid=False,
+        zeroline=False,
+    )
     figure.update_xaxes(
-        tickmode="array", tickvals=list(range(len(growth))), ticktext=growth
+        tickmode="array",
+        tickvals=list(range(len(growth))),
+        ticktext=[f"{g}%" for g in growth],
+        **axis_style,
     )
     figure.update_yaxes(
-        tickmode="array", tickvals=list(range(len(margins))), ticktext=margins
+        tickmode="array",
+        tickvals=list(range(len(margins))),
+        ticktext=[f"{m}%" for m in margins],
+        **axis_style,
     )
     for scenario, dash in [(p4_SCENARIOS["Base"], "solid"), (assumptions, "dash")]:
         if dash == "dash" and scenario == p4_SCENARIOS["Base"]:
@@ -1845,13 +1885,12 @@ def p4_make_heatmap(data, assumptions):
             x1=x + 0.47,
             y0=y - 0.47,
             y1=y + 0.47,
-            line={
-                "color": p4_WHITE if dash == "solid" else p4_NAVY,
-                "width": 3,
-                "dash": dash,
-            },
+            line={"color": p4_NAVY, "width": 4, "dash": dash},
+            fillcolor="rgba(0,0,0,0)",
+            layer="above",
         )
     return figure
+
 
 
 def p4_update_company_data(company, trigger, price, revenue, shares, previous):
@@ -2009,9 +2048,18 @@ def p4_register_callbacks(app):
         Output("panel4-assumptions", "children"),
         Input("panel4-data", "data"),
         Input("panel4-scenario", "value"),
+        Input("panel4-reset-view", "n_clicks"),
+        
     )
-    def update_results(data, scenario):
-        return p4_render_results(data, scenario)
+    def update_results(data, scenario, reset_clicks):
+        metrics, figure, table, source, description = p4_render_results(data, scenario)
+        if ctx.triggered_id == "panel4-reset-view":
+            figure.update_layout(
+                uirevision=f"reset-{reset_clicks}",
+                xaxis_autorange=True,
+                yaxis_autorange=True,
+            )
+        return metrics, figure, table, source, description
 
 
 def cached_market_data(function):
