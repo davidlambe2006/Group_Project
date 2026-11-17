@@ -39,9 +39,9 @@ SCENARIOS = {
 
 COMPANIES = {
     "NVIDIA": "NVDA", "Microsoft": "MSFT", "Alphabet": "GOOGL",
-    "Amazon": "AMZN", "Meta": "META", "Broadcom": "AVGO", "AMD": "AMD",
+    "Amazon": "AMZN", "Meta": "META", "AMD": "AMD",
     "TSMC": "TSM", "Oracle": "ORCL", "Palantir": "PLTR",
-    "Salesforce": "CRM", "ASML": "ASML",
+    "ASML": "ASML",
 }
 
 _cache = {}
@@ -214,8 +214,20 @@ def create_layout():
         html.Div([
             html.Aside([
                 html.Label("Company", htmlFor="panel4-company"),
-                dcc.Dropdown(id="panel4-company", options=list(COMPANIES),
-                             value="NVIDIA", clearable=False, style={"color": NAVY}),
+                dcc.Dropdown( 
+                    id="panel4-company",
+                    options=list(COMPANIES),
+                    value="NVIDIA",
+                    clearable=False,
+                    style={
+                        "color": WHITE,
+                        "--Dash-Fill-Inverse-Strong": NAVY,
+                        "--Dash-Text-Strong": WHITE,
+                        "--Dash-Text-Weak": MUTED,
+                        "--Dash-Stroke-Strong": LINE,
+                        "--Dash-Fill-Interactive-Strong": CYAN,
+                    },
+                ),
                 html.Button("Refresh Yahoo data", id="panel4-refresh", n_clicks=0,
                             style=BUTTON),
                 dcc.Loading(html.Div(id="panel4-status", role="status",
@@ -390,32 +402,43 @@ def render_results(data, scenario):
 
 
 def register_callbacks(app):
-    """Call once on the shared app after adding create_layout() to its layout."""
-    @app.callback(Output("panel4-scenario", "options"), Input("panel4-scenario", "value"))
+    """Register Panel 4's callbacks."""
+
+    @app.callback(
+        Output("panel4-scenario", "options"),
+        Input("panel4-scenario", "value"),
+    )
     def highlight_scenario(scenario):
         return scenario_options(scenario)
 
     @app.callback(
-        Output("panel4-data", "data"), Output("panel4-status", "children"),
-        Input("panel4-company", "value"), Input("panel4-refresh", "n_clicks"),
+        Output("panel4-data", "data"),
+        Output("panel4-status", "children"),
+        Input("panel4-company", "value"),
+        Input("panel4-refresh", "n_clicks"),
         State("panel4-data", "data"),
     )
     def update_data(company, _refresh, previous):
         return update_company_data(company, ctx.triggered_id, previous)
 
     @app.callback(
-        Output("panel4-metrics", "children"), Output("panel4-heatmap", "figure"),
-        Output("panel4-comparison", "children"), Output("panel4-source", "children"),
+        Output("panel4-metrics", "children"),
+        Output("panel4-heatmap", "figure"),
+        Output("panel4-comparison", "children"),
+        Output("panel4-source", "children"),
         Output("panel4-assumptions", "children"),
-        Input("panel4-data", "data"), Input("panel4-scenario", "value"),
+        Input("panel4-data", "data"),
+        Input("panel4-scenario", "value"),
         Input("panel4-reset-view", "n_clicks"),
     )
     def update_results(data, scenario, reset_clicks):
         metrics, figure, table, source, description = render_results(data, scenario)
-        # Changing the revision clears Plotly's stored zoom/pan ranges.
         if ctx.triggered_id == "panel4-reset-view":
-            figure.update_layout(uirevision=f"reset-{reset_clicks}",
-                                 xaxis_autorange=True, yaxis_autorange=True)
+            figure.update_layout(
+                uirevision=f"reset-{reset_clicks}",
+                xaxis_autorange=True,
+                yaxis_autorange=True,
+            )
         return metrics, figure, table, source, description
 
 
