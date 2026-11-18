@@ -1,611 +1,203 @@
 # AI Boom Dashboard
-## Project Overview
 
-The **AI Boom Dashboard** is an interactive, four-panel financial analysis application built using Python. It investigates the performance, investment activity, historical comparisons and potential valuations of major companies associated with the artificial intelligence (AI) industry.
+An interactive Python dashboard exploring AI-related stock performance, corporate investment, historical market comparisons, and hypothetical future valuations. It runs on your computer and opens in your browser.
 
-The dashboard combines historical stock market data, company financial statements and financial modelling techniques to help users explore the relationship between AI investment, corporate performance and market valuation.
-
-The application is developed using **Python, Dash and Plotly**, with financial data obtained from **Yahoo Finance** through the `yfinance` library.
-
-### Project Objectives
-
-The dashboard aims to:
-
-- Analyse the historical stock performance of major AI-related companies.
-- Investigate the relationship between capital expenditure, revenue and market capitalisation.
-- Compare the recent AI investment boom with the historical dot-com bubble.
-- Evaluate hypothetical future stock valuations under different financial assumptions.
-- Present financial information through accessible, interactive visualisations.
-
-### Dashboard Features
-
-| Panel | Title | Main Function |
+| Panel | Question explored | Main output |
 |---|---|---|
-| **1** | AI Stock Performance | Compares historical stock returns using interactive 3D charts. |
-| **2** | Capital Investment vs Revenue | Examines relationships between company spending, revenue and market value. |
-| **3** | AI Boom vs Dot-Com Bubble | Compares historical market performance across two technology investment periods. |
-| **4** | AI Valuation Simulator | Estimates hypothetical share prices using financial assumptions and scenario analysis. |
+| 1 — AI Stock Performance | How have selected companies performed against market benchmarks? | 3D performance chart and risk statistics |
+| 2 — Capital Investment vs Revenue | How does company investment relate to revenue? | Bubble chart, regression, and financial table |
+| 3 — AI Boom vs Dot-Com Bubble | How does the AI portfolio compare with the dot-com period? | Historical comparison and illustrative scenarios |
+| 4 — AI Valuation Simulator | What future price follows from selected financial assumptions? | Price estimates, scenario comparison, and sensitivity heatmap |
 
-The dashboard includes a shared company selection interface, individual panel controls, interactive charts and separate expanded views for detailed analysis.
+**Dashboard overview:** [Insert a screenshot showing the four panels and company selector. Record the capture date.]
 
----
+## 1. Opening the dashboard
 
-# 1. System Requirements
+### What you need
 
-Before running the dashboard, ensure that the following software and resources are available.
+- Python installed. The original project documentation identifies **Python 3.14** as the development version.
+- An internet connection to retrieve financial data.
+- A modern browser, such as Chrome, Edge, or Firefox.
+- The extracted project folder. VS Code is optional.
 
-| Requirement | Description |
-|---|---|
-| **Python 3** | Required to execute the dashboard application. Python 3.14 was used during development. |
-| **Internet Connection** | Required to retrieve financial data from Yahoo Finance. |
-| **Web Browser** | Google Chrome, Microsoft Edge, Firefox or another modern browser. |
-| **Terminal** | Required to install Python libraries and launch the application. |
-| **Visual Studio Code** | Recommended development environment, although not compulsory. |
+If Python is not installed, download it from [python.org](https://www.python.org/downloads/). When installing on Windows, select **Add Python to PATH** if offered.
 
-> **Note:** The dashboard runs locally on the user's computer. It does not require a separate public hosting service to operate.
+### First launch — Windows
 
-## 1.1 Python Installation
+1. Right-click the ZIP and select **Extract All**.
+2. Open the extracted folders until you reach **Group_Project**. You should see `app.py` and the `panels` folder.
+3. Right-click an empty space inside that folder and select **Open in Terminal**. Alternatively, open the folder in VS Code and choose **Terminal → New Terminal**.
+4. Run each command below separately. Wait for each to finish before entering the next.
 
-If Python is not already installed:
-
-1. Visit the official Python website: https://www.python.org/downloads/
-2. Download a compatible Python 3 version.
-3. Run the installation file.
-4. Complete the installation instructions.
-5. Open a new terminal to verify that Python has been installed correctly.
-
-On Windows, it may be necessary to enable the Python PATH option during installation.
-
-### Verify Python Installation
-
-Open **Windows PowerShell**, **Command Prompt**, or the terminal in VS Code.
-
-Enter:
+Check that Python is available:
 
 ```powershell
 python --version
 ```
 
-A successful installation should return a Python version, for example:
-
-```text
-Python 3.14.3
-```
-
-If the command is not recognised on Windows, try:
+Install the packages used by the supplied application:
 
 ```powershell
-py --version
+python -m pip install dash plotly yfinance pandas numpy flask
 ```
 
-For macOS or Linux, the equivalent command may be:
+Start the dashboard:
 
-```bash
-python3 --version
+```powershell
+python app.py
 ```
 
-If the terminal displays a valid Python 3 version, proceed to the next section.
+5. Open **[http://127.0.0.1:8050](http://127.0.0.1:8050)** in your browser.
 
----
+The application prints the local address in the terminal. Allow time for the charts to retrieve financial data. **Keep the terminal open while using the dashboard.**
 
-# 2. Project Structure
+**Startup screenshot:** [Insert the terminal showing successful startup and the local address.]
 
-The dashboard is organised into a main Python application, separate panel modules and supporting files.
+### Stopping and opening again
 
-The main application is contained in the **`Group_Project`** directory.
+- **Stop:** click the terminal and press **Ctrl+C**.
+- **Open again:** open a terminal in `Group_Project`, run `python app.py`, and visit the same address. You do not need to repeat installation.
 
-## 2.1 Directory Structure
+## 2. First walkthrough
+
+1. **Choose companies:** click the company buttons at the top. Highlighted companies are included. **Select All** and **Deselect All** change the whole selection.
+2. **Open a panel:** click one of the four overview charts.
+3. **Explore:** hover over the chart for values and use the expanded panel's controls.
+4. **Return:** use the back control to return to the overview.
+
+The top company selector controls **Panels 1–3**. **Panel 4 has its own company selector.** Selecting no companies displays a prompt in Panels 1–3.
+
+| Company | Ticker | Company | Ticker |
+|---|---|---|---|
+| NVIDIA | NVDA | AMD | AMD |
+| Microsoft | MSFT | TSMC | TSM |
+| Alphabet | GOOGL | Oracle | ORCL |
+| Amazon | AMZN | Palantir | PLTR |
+| Meta | META | ASML | ASML |
+
+## 3. Panel guides
+
+### Panel 1 — AI Stock Performance
+
+Select companies in the header, then choose a **1, 3, 5, or 10-year** period. Add **SPY** (S&P 500 ETF) or **QQQ** (Nasdaq-100 ETF) as benchmarks. Chart detail options are **Daily**, **Every 5 Days**, and **Every 20 Days**.
+
+Drag the 3D chart to rotate it and hover over lines for values.
+
+- **Indexed price:** starts at 100, allowing comparisons across different share prices. A value of 150 represents a 50% increase from the starting value.
+- **Total return:** percentage change over the analysed period.
+- **Annualised volatility:** variation in daily returns, expressed on an annual basis.
+- **Maximum drawdown:** the largest percentage fall from an earlier peak during the period.
+
+**Screenshot:** [Show the controls, chart, and statistics. State the selected companies, period, and benchmarks.]
+
+### Panel 2 — Capital Investment vs Revenue
+
+Select companies, hover over bubbles for details, and switch to the table to inspect the underlying figures.
+
+- **X-axis:** capital expenditure—spending on long-term assets, in USD billions.
+- **Y-axis:** annual revenue—sales before expenses, in USD billions.
+- **Bubble size:** market capitalisation—the market value of the company's equity.
+- **Regression line:** the fitted linear relationship between spending and revenue.
+- **R²:** the proportion of variation in revenue explained by that fit within the selected sample.
+
+The relationship does not establish that spending caused the revenue. Company reporting periods and business models may differ.
+
+**Screenshots:** [Show the bubble chart with readable axes and regression information, followed by the financial table.]
+
+### Panel 3 — AI Boom vs Dot-Com Bubble
+
+Use the shared company selector to compare the AI portfolio **from 2023 onwards** with the **NASDAQ Composite during 1995–2003**. Inspect indexed performance, returns, and maximum drawdowns.
+
+The Bull, Base, and Bear paths are illustrative scenarios, not validated predictions. Similar historical patterns do not establish that the same outcomes will repeat.
+
+**Screenshot:** [Show the historical comparison, metrics, and scenario labels. State the companies selected.]
+
+### Panel 4 — AI Valuation Simulator
+
+Estimate a hypothetical future share price from assumptions about growth, profitability, and valuation.
+
+#### How to use it
+
+1. Choose a company using this panel's selector.
+2. Review the financial data and source dates.
+3. Select **Bear**, **Base**, or **Bull**.
+4. Compare the estimated future price and annualised return.
+5. Hover over the heatmap to explore growth and profit-margin combinations.
+6. Expand **Compare scenarios** to view the comparison table.
+
+| Scenario | Annual revenue growth | Net profit margin | Future P/E | Years |
+|---|---:|---:|---:|---:|
+| Bear | 10% | 20% | 30× | 5 |
+| Base | 20% | 25% | 30× | 5 |
+| Bull | 30% | 30% | 30× | 5 |
+
+These presets are illustrative assumptions, not company-specific forecasts.
+
+#### Financial basis
+
+The simulator uses an **earnings-multiple model**: grow revenue, estimate profit, calculate earnings per share (EPS), then apply a future price-to-earnings ratio (P/E).
+
+```text
+Future revenue = current annual revenue × (1 + growth)^years
+Future EPS = future revenue × net profit margin ÷ equivalent shares
+Future price = future EPS × future P/E
+Annualised return = (future price ÷ current price)^(1 ÷ years) − 1
+```
+
+Growth and margin are decimals in these formulas: 20% is `0.20`.
+
+A **25% net profit margin** means $0.25 profit per $1 of revenue. A **30× P/E** means a price equal to 30 times annual earnings per share.
+
+**Example:** $50 billion revenue growing at 20% annually for five years becomes approximately $124.4 billion. At a 25% margin, 5 billion equivalent shares, and a 30× P/E, the estimated future price is **$186.62**.
+
+Annualised return expresses the constant yearly price growth needed to reach the estimate. The heatmap repeats the valuation across growth and margin combinations, keeping the selected scenario's P/E and horizon.
+
+**Limits:** this estimates a future price under assumptions; it does not discount future cash flows to estimate today's intrinsic value. Growth, margin, shares, P/E, and FX are held constant. Dividends, fees, and taxes are excluded.
+
+For American Depositary Share (ADS) listings, the price and equivalent share count must use consistent listing units. **Refresh Yahoo data** restores retrieved figures.
+
+**Screenshots:** [Show company, scenario, assumptions, results, and heatmap. Add the expanded manual-input controls with units visible.]
+
+## 4. Data and implementation
+
+Financial data is retrieved from **Yahoo Finance through yfinance**. The application combines historical prices, financial statements, portfolio calculations, linear regression, and valuation modelling.
+
+- Internet access is required for retrieval; market data is not bundled with the application.
+- Missing source data can prevent charts or calculations from loading.
+- Selected data requests are cached in memory for **15 minutes**.
+- Financial values change between runs; screenshots are dated examples.
+- Historical data and hypothetical scenarios should be interpreted separately.
+
+**Architecture:** `app.py` combines the panel modules and manages navigation. Dash updates outputs when controls change; Plotly draws the charts; pandas and NumPy process data; Flask provides the local web server.
 
 ```text
 Group_Project/
-│
 ├── app.py
-│
 ├── README.md
-│
 ├── requirements.txt
-│
-├── panels/
-│   │
-│   ├── __init__.py
-│   ├── dashboard_shared.py
-│   ├── panel1_stock.py
-│   ├── panel2_valuation.py
-│   ├── panel3_dotcom.py
-│   ├── panel4_simulator.py
-│   │
-│   └── panel3_assets/
-│       └── panel3.css
-│
-└── tests/
-    │
-    ├── test_dashboard_integration.py
-    └── verify_real_financials.py
+└── panels/
+    ├── dashboard_shared.py
+    ├── panel1_stock.py
+    ├── panel2_valuation.py
+    ├── panel3_dotcom.py
+    └── panel4_simulator.py
 ```
 
-## 2.2 Explanation of Project Files
+## 5. Troubleshooting
 
-| File / Folder | Purpose |
+| Problem | What to do |
 |---|---|
-| `app.py` | Main application file responsible for launching and integrating the dashboard. |
-| `README.md` | Project documentation and installation instructions. |
-| `requirements.txt` | Lists the external Python libraries required by the application. |
-| `panels/` | Contains the Python modules responsible for individual dashboard components. |
-| `dashboard_shared.py` | Stores shared configuration and styling information used across panels. |
-| `panel1_stock.py` | Contains functionality related to historical stock performance. |
-| `panel2_valuation.py` | Contains the capital investment and revenue analysis functionality. |
-| `panel3_dotcom.py` | Contains the AI boom and dot-com bubble comparison. |
-| `panel4_simulator.py` | Contains the interactive financial valuation simulator. |
-| `panel3_assets/` | Contains styling resources associated with Panel 3. |
-| `tests/` | Contains scripts used for testing and verification. |
----
-
-# 3. Installation and Setup
-## Step 1 — Extract the Project ZIP
-
-1. Download and save the project ZIP file to your computer.
-2. Locate the downloaded ZIP file.
-3. Right-click the file and select **Extract All** (Windows), or double-click the file (macOS).
-4. Open the extracted project folder.
-5. Locate the `Group_Project` directory containing `app.py` and `panels/`.
-
-> **Important:** Do not move `app.py` out of the `Group_Project` directory or separate it from the `panels/` folder. The application imports code from this directory.
-
-## Step 2 — Open the Project in VS Code
-
-**Visual Studio Code is recommended for running the dashboard.**
-
-1. Launch **Visual Studio Code**.
-2. Select **File → Open Folder**.
-3. Navigate to the extracted `Group_Project` directory.
-4. Select **Open Folder**.
-5. In the menu bar, select **Terminal → New Terminal**.
-6. Confirm that the terminal is located inside `Group_Project`.
-
-### Verify Your Working Directory
-
-Enter the following command:
-
-```powershell
-pwd
-```
-
-This displays your current working directory.
-
-Next, enter:
-
-```powershell
-ls
-```
-
-You should see files and folders including:
-
-- `app.py` — Main application entry point.
-- `panels/` — Dashboard modules.
-- `tests/` — Project testing files.
-- `requirements.txt` — Required dependencies.
-- `README.md` — Project documentation.
-
-If these files are not visible, navigate to the correct directory using the `cd` command.
-
-### Alternative: Running Without VS Code
-
-The application can also be launched using:
-
-- Windows PowerShell
-- Windows Command Prompt
-- macOS Terminal
-- Linux Terminal
-
-Navigate to the directory containing `app.py` before continuing.
-
----
-## Step 3 — Create a Virtual Environment
-
-Creating a Python virtual environment is recommended.
-
-A virtual environment isolates the project's Python packages from other applications installed on the same computer.
-
-This reduces the likelihood of dependency conflicts.
-
-### Windows (PowerShell)
-
-From inside the `Group_Project` directory, enter:
-
-```powershell
-python -m venv .venv
-```
-
-This creates a new virtual environment called `.venv`.
-
-Activate it using:
-
-```powershell
-.\.venv\Scripts\Activate.ps1
-```
-
-When activated successfully, the terminal prompt should usually display:
-
-```text
-(.venv)
-```
-
-This indicates that the virtual environment is active.
-
-### macOS / Linux
-
-Create the environment:
-
-```bash
-python3 -m venv .venv
-```
-
-Activate the environment:
-
-```bash
-source .venv/bin/activate
-```
-
-### If Windows Blocks Activation
-
-Some Windows installations prevent PowerShell scripts from running.
-
-If this occurs, the virtual environment can be used without activating it.
-
-For example:
-
-```powershell
-.\.venv\Scripts\python.exe -m pip --version
-```
-
-Subsequent installation and launch commands can also be run using this executable.
-
----
-
-## Step 4 — Install the Required Python Libraries
-
-The dashboard depends on several external Python packages.
-
-These libraries must be installed before the application can run.
-
-### Required Libraries
-
-| Library | Purpose |
-|---|---|
-| **Dash** | Creates the interactive web application and user controls. |
-| **Plotly** | Generates interactive financial charts and visualisations. |
-| **yfinance** | Retrieves financial data from Yahoo Finance. |
-| **pandas** | Organises, cleans and analyses financial datasets. |
-| **NumPy** | Performs numerical and statistical calculations. |
-| **Flask** | Provides the underlying web server used by Dash. |
-| **Matplotlib** | Provides additional Python plotting functionality imported by the application. |
-
-
-
-### Installing Dependencies
-
-All required Python libraries are listed in `requirements.txt`.
-
-With the terminal open in `Group_Project` and the virtual environment activated, run:
-
-```powershell
-python -m pip install -r requirements.txt
-```
-
-This installs the packages required to run the dashboard.
-
-Once installation is complete, proceed to launching the application.
-
-# 4. Launching the Dashboard
-
-## Step 5 — Start the Application
-
-Ensure that the terminal is open in the `Group_Project` directory.
-
-Run the following command:
-
-```powershell
-python app.py
-```
-
-This executes the main Python application and starts the local Dash web server.
-
-The dashboard runs on **port 8050** by default.
-
-## Step 6 — Open the Dashboard
-
-Open a web browser such as Google Chrome, Microsoft Edge or Firefox.
-
-Enter the following address:
-
-**http://127.0.0.1:8050**
-
-The **AI Boom Dashboard** should open, displaying the four interactive financial analysis panels.
-
-An internet connection is required to retrieve financial information from Yahoo Finance. Some charts may take longer to load initially while the data is being retrieved and processed.
-
-
-## Step 7 — Verify the Dashboard
-
-Once the application has loaded, confirm that:
-
-1. All four dashboard panels are visible.
-2. The company selection controls respond correctly.
-3. Charts update when their respective controls are changed.
-4. Individual panels can be opened in expanded views.
-5. Financial data and calculations are displayed where the underlying information is available.
-
-If these features operate correctly, the dashboard is ready to use.
-
-## Step 8 — Stop the Application
-
-To stop the dashboard, return to the terminal and press:
-
-```text
-Ctrl + C
-```
-
-This terminates the local web server.
-
-To restart the application, run:
-
-```powershell
-python app.py
-```
-
-### Running on a Different Port
-
-If port 8050 is already in use, the dashboard can be launched using another port.
-
-For example:
-
-```powershell
-python app.py --port 8051
-```
-
-The dashboard can then be accessed at:
-
-**http://127.0.0.1:8051**
-
----
-
-# 5. Using the Dashboard
-
-The dashboard provides an interactive environment for analysing AI-related companies, historical market performance and financial valuation scenarios.
-
-The main interface displays four panels, each examining a different aspect of the AI investment boom.
-
-## 5.1 Dashboard Navigation
-
-Users can access all four panels from the main dashboard overview.
-
-Each panel can also be opened in an expanded view, providing additional analytical controls and more detailed financial visualisations.
-
-The dashboard consists of:
-
-| Panel | Analysis | Primary Visualisation |
-|---|---|---|
-| **Panel 1** | AI Stock Performance | Interactive 3D stock chart |
-| **Panel 2** | Capital Investment vs Revenue | Bubble chart and financial data table |
-| **Panel 3** | AI Boom vs Dot-Com Bubble | Historical market comparison |
-| **Panel 4** | AI Valuation Simulator | Valuation scenarios and sensitivity heatmap |
-
-## 5.2 Company Selection
-
-The shared dashboard header allows users to select the AI-related companies included in the analysis.
-
-The application supports ten companies:
-
-| Company | Stock Ticker |
-|---|---|
-| NVIDIA | `NVDA` |
-| Microsoft | `MSFT` |
-| Alphabet | `GOOGL` |
-| Amazon | `AMZN` |
-| Meta Platforms | `META` |
-| Advanced Micro Devices | `AMD` |
-| Taiwan Semiconductor Manufacturing Company | `TSM` |
-| Oracle | `ORCL` |
-| Palantir Technologies | `PLTR` |
-| ASML Holding | `ASML` |
-
-### How to Select Companies
-
-1. Locate the company selector in the dashboard header.
-2. Select the companies to include in the analysis.
-3. Deselect companies that are not required.
-4. Allow the relevant charts to update.
-
-The shared selection applies to **Panels 1, 2 and 3**.
-
-**Panel 4 operates independently**, with its own company selection and valuation controls.
-
----
-# 6. Dashboard Panels
-
-Each of the four panels examines a different aspect of the AI investment boom. Users can open individual panels for expanded visualisations and additional controls.
-
-## 6.1 Panel 1 — AI Stock Performance
-
-**Purpose:** Compare the historical stock performance and risk characteristics of major AI-related companies against wider market benchmarks.
-
-**Features:**
-- Interactive 3D stock performance chart.
-- Historical periods of 1, 3, 5 or 10 years.
-- Optional S&P 500 (`SPY`) and Nasdaq-100 (`QQQ`) benchmarks.
-- Adjustable chart detail (Daily, Every 5 Days or Every 20 Days).
-- Total return, annualised volatility and maximum drawdown statistics.
-
-**How to use:**
-1. Select companies using the shared dashboard header.
-2. Choose a historical period and optional market benchmarks.
-3. Adjust the chart detail and explore the interactive 3D visualisation.
-4. Examine the accompanying performance and risk statistics.
-
-Stock prices are indexed to a common starting value of **100**, allowing meaningful percentage performance comparisons between companies with different share prices.
-
----
-## 6.2 Panel 2 — Capital Investment vs Revenue
-
-**Purpose:** Examine the relationship between capital expenditure, annual revenue and market capitalisation among AI-related companies.
-
-**Features:**
-- Interactive bubble chart and financial data table.
-- Capital expenditure (X-axis), revenue (Y-axis) and market capitalisation (bubble size).
-- Linear regression and R² analysis.
-- Company-level financial information from Yahoo Finance.
-
-**How to use:**
-1. Select the companies to analyse.
-2. Examine the bubble chart and hover over companies for financial details.
-3. Review the regression line and R² statistic.
-4. Switch to the table view to inspect the underlying financial values.
-
-**Interpretation:** The regression illustrates the statistical relationship between capital expenditure and revenue. R² measures the strength of the fitted linear relationship within the selected sample, but does not establish causation.
-
----
-## 6.3 Panel 3 — AI Boom vs Dot-Com Bubble
-
-**Purpose:** Compare the recent AI investment boom with the historical dot-com market cycle.
-
-**Features:**
-- Historical comparison of the NASDAQ Composite (1995–2003) and selected AI-related equities (2023 onwards).
-- Indexed price performance, returns and maximum drawdowns.
-- Interactive historical charts.
-- Illustrative Bull, Base and Bear scenarios.
-
-**How to use:**
-1. Select the AI companies to include in the comparison.
-2. Examine the indexed performance of both historical periods.
-3. Compare returns, drawdowns and market behaviour.
-4. Explore the hypothetical future scenario paths.
-
-**Interpretation:** The comparison highlights similarities and differences between two technology-driven investment periods. The future scenarios are illustrative assumptions, not predictions of actual market performance.
-
----
-
-## 6.4 Panel 4 — AI Valuation Simulator
-
-**Purpose:** Estimate hypothetical future share prices and investment returns under different financial assumptions.
-
-**Features:**
-- Company-specific valuation modelling.
-- Bear, Base and Bull scenarios.
-- Revenue growth, net profit margin and P/E multiple assumptions.
-- Estimated future share prices and annualised returns.
-- Interactive valuation sensitivity heatmap.
-
-**How to use:**
-1. Select a company from the panel's dropdown.
-2. Review its financial information.
-3. Choose a Bear, Base or Bull scenario.
-4. Compare estimated future share prices and annualised returns.
-5. Explore how changes in revenue growth and profit margins affect the valuation.
-
-The simulator uses a simplified earnings-multiple valuation model. All outputs depend on the selected assumptions and should not be treated as guaranteed investment outcomes.
-
----
-# 7. Technical Implementation
-
-## 7.1 Application Architecture
-
-The dashboard is built using **Python, Dash and Plotly**, with individual modules for the four financial panels.
-
-- **`app.py`** integrates the panels, manages navigation and starts the local web server.
-- **`panels/`** contains the individual analytical modules.
-- **`dashboard_shared.py`** provides shared company information, styling and configuration.
-- **Dash callbacks** update charts and financial outputs when users change controls.
-- **pandas and NumPy** process financial data and perform numerical calculations.
-- **Plotly** generates the interactive visualisations.
-
-## 7.2 Data Retrieval
-
-Financial information is retrieved from **Yahoo Finance** using the `yfinance` library.
-
-The application uses historical share prices, market capitalisation, financial statements and other available company data. Data is processed before being used in calculations and visualisations.
-
-An in-memory cache stores selected financial data for **15 minutes**, reducing repeated requests and improving performance.
-
-## 7.3 Financial Calculations
-
-The principal calculations used across the dashboard include:
-
-| Calculation | Formula / Method |
-|---|---|
-| Indexed Price | `(Current Price / Initial Price) × 100` |
-| Total Return | `(Final Price / Initial Price − 1) × 100` |
-| Annualised Volatility | `Daily Return Standard Deviation × √252 × 100` |
-| Maximum Drawdown | Largest percentage decline from a previous peak |
-| Linear Regression | `Revenue = Intercept + Slope × Capital Expenditure` |
-| Future Revenue | `Current Revenue × (1 + Growth Rate)^Years` |
-| Future Net Income | `Future Revenue × Net Profit Margin` |
-| Future Share Price | `(Future Net Income / Shares) × P/E Multiple` |
-| Annualised Return | `(Future Price / Current Price)^(1 / Years) − 1` |
-
-These calculations support historical analysis, financial comparisons and hypothetical valuation scenarios.
-
-The dashboard is intended for **educational and analytical purposes**, not investment advice. Results depend on external data quality and, where applicable, model assumptions.
-
----
-# 8. Troubleshooting and Testing
-
-## 8.1 Common Issues
-
-| Problem | Solution |
-|---|---|
-| Python is not recognised | Verify the Python installation using `python --version` or `py --version` on Windows. |
-| `ModuleNotFoundError` | Activate the virtual environment and install dependencies using `python -m pip install -r requirements.txt`. |
-| `No module named 'panels'` | Ensure `app.py` and `panels/` remain in the same directory. |
-| `app.py` cannot be found | Open the terminal in the correct `Group_Project` directory. |
-| Dashboard does not load | Confirm the server is running and open `http://127.0.0.1:8050`. |
-| Port 8050 is occupied | Run `python app.py --port 8051` and open `http://127.0.0.1:8051`. |
-| Financial data is unavailable | Check the internet connection and retry. Some Yahoo Finance data may be temporarily unavailable. |
-| Charts are slow to load | Allow time for financial data retrieval and processing; check the terminal for errors. |
-
-## 8.2 Automated Tests
-
-The project includes integration tests in the `tests/` directory.
-
-To execute the automated tests, open a terminal in `Group_Project` and run:
-
-```powershell
-python -B -m unittest discover -s tests -p "test_*.py" -v
-```
-
-To run the additional financial data verification script:
-
-```powershell
-python -B tests/verify_real_financials.py
-```
-
-The integration tests help verify application behaviour, while the financial verification script checks aspects of the data-processing functionality.
-
-## 8.3 Manual Verification
-
-After launching the dashboard, confirm that:
-
-- [ ] All four panels display successfully.
-- [ ] Company selection updates the relevant panels.
-- [ ] Historical periods and chart controls work.
-- [ ] The financial data table displays correctly.
-- [ ] The historical comparison and valuation scenarios respond to user inputs.
-- [ ] No unexpected errors appear in the terminal.
----
-
-# 9. References
-
-The dashboard uses the following data sources, libraries and documentation:
-
-| Resource | Reference |
-|---|---|
-| Python | [Python Documentation](https://docs.python.org/3/) |
-| Dash | [Dash Documentation](https://dash.plotly.com/) |
-| Plotly | [Plotly Python Documentation](https://plotly.com/python/) |
-| Yahoo Finance | [Yahoo Finance](https://finance.yahoo.com/) |
-| yfinance | [yfinance GitHub Repository](https://github.com/ranaroussi/yfinance) |
-| pandas | [pandas Documentation](https://pandas.pydata.org/docs/) |
-| NumPy | [NumPy Documentation](https://numpy.org/doc/) |
-| Flask | [Flask Documentation](https://flask.palletsprojects.com/) |
-| Matplotlib | [Matplotlib Documentation](https://matplotlib.org/) |
-
----
+| `python` is not recognised | Try `py --version`. If it works, replace `python` with `py` in the commands. Otherwise install Python and reopen the terminal. |
+| `app.py` cannot be found | Open the terminal in `Group_Project`, where `app.py` is visible. |
+| A package is missing | Repeat the installation command in Section 1 using the same Python installation used to launch the app. |
+| `panels` cannot be imported | Keep `app.py` and the complete `panels/` folder together. |
+| Browser cannot connect | Confirm the app is still running and use the address displayed in the terminal. |
+| Port 8050 is occupied | Run `python app.py --port 8051`, then open `http://127.0.0.1:8051`. |
+| Financial data is unavailable | Check internet access and refresh where available. |
+
+## 6. References and attribution
+
+- [Yahoo Finance](https://finance.yahoo.com/) — financial data.
+- [yfinance](https://github.com/ranaroussi/yfinance) — data retrieval.
+- [Python](https://docs.python.org/3/), [Dash](https://dash.plotly.com/), [Plotly](https://plotly.com/python/), [pandas](https://pandas.pydata.org/docs/), [NumPy](https://numpy.org/doc/), and [Flask](https://flask.palletsprojects.com/) — application libraries and documentation.
+- **External code, resources, and assistance:** [identify sources, their use, and any required declarations under module rules].
