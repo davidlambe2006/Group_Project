@@ -1,4 +1,4 @@
-﻿"""Panel 4: self-contained Dash valuation simulator.
+"""Panel 4: self-contained Dash valuation simulator.
 
 Install: python -m pip install dash plotly yfinance
 Run:     python panels/panel4_simulator.py
@@ -23,6 +23,12 @@ from urllib.request import urlopen
 from dash import Dash, Input, Output, State, ctx, dcc, html
 import plotly.graph_objects as go
 import yfinance as yf
+
+try:
+    from .dashboard_shared import BORDER, NAVY as SHARED_NAVY
+except ImportError:  # Direct execution of the standalone simulator.
+    from dashboard_shared import BORDER, NAVY as SHARED_NAVY
+
 
 NAVY = "#081423"
 CYAN = "#20e3e8"
@@ -465,6 +471,444 @@ def p4_open_when_ready(url, timeout=30):
         time.sleep(.2)
     print(f"The dashboard did not start within {timeout} seconds. "
           "Check the terminal for an error, then run the file again.")
+
+
+# Integrated dashboard
+
+
+p4_NAVY = SHARED_NAVY
+p4_LINE = BORDER
+p4_BUTTON = {
+    "backgroundColor": p4_LINE,
+    "color": WHITE,
+    "border": "none",
+    "padding": "10px 14px",
+    "cursor": "pointer",
+    "margin": "12px 0",
+}
+
+def p4_integrated_load_company_data(company, force=False):
+    """Use the simulator's cached Yahoo data with guidance for manual inputs."""
+    try:
+        return p4_load_company_data(company, force=force)
+    except ValueError as error:
+        message = str(error)
+        if message == "The listing/reporting currency could not be verified. Refresh to retry.":
+            raise ValueError(
+                "The listing/reporting currency could not be verified. Use manual USD inputs."
+            ) from error
+        if message == "Annual revenue is unavailable from Yahoo. Refresh to retry.":
+            raise ValueError(
+                "Annual revenue is unavailable from Yahoo. Try again or enter it manually."
+            ) from error
+        if message == "Yahoo's price and share units disagree. Refresh to retry.":
+            raise ValueError(
+                "Yahoo's price and share units disagree. Refresh or use verified manual inputs."
+            ) from error
+        if message.startswith("Could not load ") and message.endswith("/USD FX. Refresh to retry."):
+            raise ValueError(
+                message.removesuffix("Refresh to retry.") + "Use manual USD revenue."
+            ) from error
+        raise
+
+
+def p4_integrated_scenario_options(selected="Base"):
+    descriptions = {"Bear": "Cautious", "Base": "Central", "Bull": "Optimistic"}
+    colours = {"Bear": "#ffb47d", "Base": CYAN, "Bull": "#8ce6ae"}
+
+    return [
+        {
+            "value": name,
+            "label": html.Div([
+                html.Strong(
+                    f"{name} - {descriptions[name]}"
+                    + (" | SELECTED" if name == selected else "")
+                ),
+                html.Div(
+                    f'{values["growth"]}% growth / {values["margin"]}% margin',
+                    style={"fontSize": "13px", "marginTop": "5px"},
+                ),
+            ], style={
+                "padding": "11px 12px",
+                "borderRadius": "6px",
+                "border": f"2px solid {colours[name]}",
+                "backgroundColor": colours[name] if name == selected else p4_NAVY,
+                "color": p4_NAVY if name == selected else WHITE,
+                "flex": "1",
+            }),
+        }
+        for name, values in SCENARIOS.items()
+    ]
+
+
+def p4_integrated_create_layout():
+    """Return Panel 4's layout for a standalone or shared Dash app."""
+
+    def number(label, key):
+        return html.Label(
+            [
+                label,
+                dcc.Input(
+                    id=f"panel4-{key}",
+                    type="number",
+                    min=0,
+                    placeholder="Enter a positive number",
+                    debounce=True,
+                    style={
+                        "width": "100%",
+                        "boxSizing": "border-box",
+                        "padding": "9px",
+                    },
+                ),
+            ],
+            style={"display": "block", "marginBottom": "12px"},
+        )
+
+    return html.Div(
+        [
+            dcc.Store(id="panel4-data", storage_type="memory"),
+            html.H2("04 | AI Valuation Simulator", style={"color": CYAN}),
+            html.Div(
+                [
+                    html.Aside(
+                        [
+                            html.Label("Company", htmlFor="panel4-company"),
+                            dcc.Dropdown(
+                                id="panel4-company",
+                                options=list(COMPANIES),
+                                value="NVIDIA",
+                                clearable=False,
+                                style={
+                                    "color": WHITE,
+                                    "--Dash-Fill-Inverse-Strong": p4_NAVY,
+                                    "--Dash-Text-Strong": WHITE,
+                                    "--Dash-Text-Weak": MUTED,
+                                    "--Dash-Stroke-Strong": p4_LINE,
+                                    "--Dash-Fill-Interactive-Strong": CYAN,
+                                },
+                            ),
+                            html.Button(
+                                "Refresh Yahoo data",
+                                id="panel4-refresh",
+                                n_clicks=0,
+                                style=p4_BUTTON,
+                            ),
+                            dcc.Loading(
+                                html.Div(
+                                    id="panel4-status",
+                                    role="status",
+                                    style={"fontSize": "13px", "marginBottom": "16px"},
+                                )
+                            ),
+                            html.H3("Scenario"),
+                                                        dcc.RadioItems(
+                                id="panel4-scenario",
+                                options=p4_integrated_scenario_options(),
+                                value="Base",
+                                style={"display": "grid", "gap": "6px"},
+                                inputStyle={
+                                    "accentColor": CYAN,
+                                    "marginRight": "8px",
+                                },
+                                labelStyle={
+                                    "display": "flex",
+                                    "alignItems": "center",
+                                    "cursor": "pointer",
+                                },
+                            ),
+
+                            html.Div(
+                                id="panel4-assumptions", style={"margin": "16px 0"}
+                            ),
+                            html.Details(
+                                [
+                                    html.Summary("Data & manual inputs"),
+                                    html.P(
+                                        "Use USD figures for the selected listing. Refresh restores Yahoo data."
+                                    ),
+                                    number("Share / ADS price (USD)", "price"),
+                                    number("Annual revenue (USD billions)", "revenue"),
+                                    number(
+                                        "Total equivalent shares (billions)", "shares"
+                                    ),
+                                    html.Button(
+                                        "Apply manual inputs",
+                                        id="panel4-apply",
+                                        n_clicks=0,
+                                        style=p4_BUTTON,
+                                    ),
+                                ],
+                               style={"display": "none"},
+                            ),
+                        ],
+                    style={"flex": "0 1 290px", "minWidth": "230px"},
+                    ),
+                    html.Main(
+                        [
+                            dcc.Loading(
+                                html.Div(
+                                    [
+                                        html.Div(
+                                            id="panel4-source",
+                                        style={"display": "none"},
+                                        ),
+                                        html.Div(
+                                            id="panel4-metrics",
+                                            style={
+                                                "display": "flex",
+                                                "flexWrap": "wrap",
+                                                "gap": "12px",
+                                                "margin": "18px 0",
+                                            },
+                                        ),
+                                        html.H3("Annual return sensitivity"),
+                                        html.P(
+                                            "Turquoise = gain | White = 0% | Orange = loss. Solid outline = Base; dashed outline = selected scenario.",
+                                            style={
+                                                "color": MUTED,
+                                                "fontSize": "13px",
+                                            },
+                                        ),
+                                                                                html.Button(
+                                            "Reset view",
+                                            id="panel4-reset-view",
+                                            n_clicks=0,
+                                            style={**p4_BUTTON, "margin": "0 0 8px"},
+                                        ),
+                                        dcc.Graph(
+                                            id="panel4-heatmap",
+                                            config={
+                                                "displayModeBar": True,
+                                                "displaylogo": False,
+                                                "modeBarButtons": [
+                                                    ["zoomIn2d", "zoomOut2d", "resetScale2d"]
+                                                ],
+                                                "doubleClick": "reset",
+                                            },
+                                            style={"height": "480px"},
+                                        ),
+
+                                        html.Details(
+                                            [
+                                                html.Summary("Compare scenarios"),
+                                                html.Div(
+                                                    id="panel4-comparison",
+                                                    style={"overflowX": "auto"},
+                                                ),
+                                            ]
+                                        ),
+                                    ]
+                                )
+                            ),
+                            html.Details(
+                                [
+                                    html.Summary("How it works"),
+                                    html.P(
+                                        "Future price = annual revenue Ã— (1 + growth)^years Ã— net margin Ã· equivalent shares Ã— future P/E."
+                                    ),
+                                    html.P(
+                                        "Annual return = (future price Ã· current price)^(1 Ã· years) âˆ’ 1. Growth, margin, shares, P/E and FX stay constant. Presets are illustrative assumptions. Excludes dividends, fees and taxes."
+                                    ),
+                                ],
+                                style={"marginTop": "20px"},
+                            ),
+                        ],
+                        style={"flex": "4 1 600px", "minWidth": "0"},
+                    ),
+                ],
+                style={"display": "flex", "flexWrap": "wrap", "gap": "28px"},
+            ),
+        ],
+        id="panel4",
+        style={
+            "backgroundColor": p4_NAVY,
+            "color": WHITE,
+            "fontFamily": "Arial, sans-serif",
+            "padding": "24px",
+            "minHeight": "100vh",
+            "boxSizing": "border-box",
+        },
+    )
+
+
+def p4_integrated_make_heatmap(data, assumptions):
+    """Apply the integrated dashboard's colours and manual-input prompt."""
+    figure = p4_make_heatmap(data, assumptions)
+    figure.update_layout(paper_bgcolor=p4_NAVY, plot_bgcolor=p4_NAVY)
+    figure.update_traces(textfont_color=p4_NAVY, selector={"type": "heatmap"})
+    figure.update_shapes(line_color=p4_NAVY)
+    if not data:
+        figure.update_annotations(text="Load Yahoo data or enter manual inputs")
+    return figure
+
+
+def p4_integrated_update_company_data(company, trigger, price, revenue, shares, previous):
+    """Keep each browser's selected/manual inputs in its own dcc.Store."""
+    saved = previous if previous and previous.get("company") == company else None
+    try:
+        if trigger == "panel4-apply":
+            if company not in COMPANIES:
+                raise ValueError("Choose a company from the list.")
+            data = {
+                "company": company,
+                "ticker": COMPANIES[company],
+                "current_price": p4_positive_number(price, "share price"),
+                "revenue": p4_positive_number(revenue, "annual revenue") * 1000000000.0,
+                "shares": p4_positive_number(shares, "equivalent shares")
+                * 1000000000.0,
+                "mode": "Manual inputs",
+                "source": "User-entered USD inputs",
+                "quote_date": "User supplied; date unspecified",
+                "revenue_date": "User supplied; date unspecified",
+                "retrieved": datetime.now(timezone.utc).strftime("%d %b %Y %H:%M UTC"),
+                "share_note": "User-supplied equivalent share count.",
+                "fx_note": "Revenue entered in USD. FX stays constant.",
+            }
+        else:
+            data = p4_integrated_load_company_data(company, force=trigger == "panel4-refresh")
+        for scenario in SCENARIOS.values():
+            p4_heatmap_data(data, scenario)
+        return (data, f"{data['mode']} | Retrieved {data['retrieved']}")
+    except Exception as error:
+        status = f"Could not update data: {error} "
+        status += (
+            "Showing previous inputs." if saved else "Retry or enter manual USD inputs."
+        )
+        return (saved, status)
+
+
+def p4_integrated_render_results(data, scenario):
+    assumptions = SCENARIOS[scenario]
+    description = f"Growth: {assumptions['growth']}% / year | Net margin: {assumptions['margin']}% | P/E: {assumptions['pe']}x | Period: {assumptions['years']} years"
+    if not data:
+        return (
+            [],
+            p4_integrated_make_heatmap(None, assumptions),
+            [],
+            "No company figures loaded.",
+            description,
+        )
+    result = p4_value_for(data, assumptions)
+    metrics = []
+    for title, value in [
+        ("Current price (USD)", f"${data['current_price']:,.2f}"),
+        (
+            f"Est. price in {assumptions['years']} years (USD)",
+            f"${result['price']:,.2f}",
+        ),
+        ("Est. annual return", f"{result['annual_return']:+.1%}"),
+    ]:
+        metrics.append(
+            html.Div(
+                [
+                    html.Div(title),
+                    html.Strong(value, style={"fontSize": "28px", "color": CYAN}),
+                ],
+                style={
+                    "border": f"1px solid {p4_LINE}",
+                    "padding": "14px",
+                    "flex": "1 1 180px",
+                },
+            )
+        )
+    rows = []
+    for name, values in SCENARIOS.items():
+        outcome = p4_value_for(data, values)
+        cells = [
+            name,
+            f"{values['growth']}%",
+            f"{values['margin']}%",
+            values["pe"],
+            values["years"],
+            f"${outcome['price']:,.2f}",
+            f"{outcome['annual_return']:+.1%}",
+        ]
+        rows.append(
+            html.Tr([html.Td(value, style={"padding": "10px"}) for value in cells])
+        )
+    table = html.Table(
+        [
+            html.Thead(
+                html.Tr(
+                    [
+                        html.Th(label, style={"padding": "10px"})
+                        for label in [
+                            "Scenario",
+                            "Growth",
+                            "Margin",
+                            "P/E",
+                            "Years",
+                            "Future price",
+                            "Annual return",
+                        ]
+                    ]
+                )
+            ),
+            html.Tbody(rows),
+        ],
+        style={"width": "100%", "textAlign": "left"},
+    )
+    source = html.Div(
+        [
+            html.Div(f"{data['company']} ({data['ticker']}) | {data['source']}"),
+            html.Div(
+                f"Revenue: ${data['revenue'] / 1000000000.0:,.2f}bn | Equivalent shares: {data['shares'] / 1000000000.0:,.3f}bn"
+            ),
+            html.Div(
+                f"Quote: {data['quote_date']} | Annual period ended: {data['revenue_date']}"
+            ),
+            html.Div(data["share_note"]),
+            html.Div(data["fx_note"]),
+        ]
+    )
+    return (metrics, p4_integrated_make_heatmap(data, assumptions), table, source, description)
+
+
+def p4_integrated_register_callbacks(app):
+    """Call once on the shared app after adding create_layout() to its layout."""
+    @app.callback(
+        Output("panel4-scenario", "options"),
+        Input("panel4-scenario", "value"),
+    )
+    def highlight_scenario(scenario):
+        return p4_integrated_scenario_options(scenario)
+
+    @app.callback(
+        Output("panel4-data", "data"),
+        Output("panel4-status", "children"),
+        Input("panel4-company", "value"),
+        Input("panel4-refresh", "n_clicks"),
+        Input("panel4-apply", "n_clicks"),
+        State("panel4-price", "value"),
+        State("panel4-revenue", "value"),
+        State("panel4-shares", "value"),
+        State("panel4-data", "data"),
+    )
+    def update_data(company, _refresh, _apply, price, revenue, shares, previous):
+        return p4_integrated_update_company_data(
+            company, ctx.triggered_id, price, revenue, shares, previous
+        )
+
+    @app.callback(
+        Output("panel4-metrics", "children"),
+        Output("panel4-heatmap", "figure"),
+        Output("panel4-comparison", "children"),
+        Output("panel4-source", "children"),
+        Output("panel4-assumptions", "children"),
+        Input("panel4-data", "data"),
+        Input("panel4-scenario", "value"),
+        Input("panel4-reset-view", "n_clicks"),
+
+    )
+    def update_results(data, scenario, reset_clicks):
+        metrics, figure, table, source, description = p4_integrated_render_results(data, scenario)
+        if ctx.triggered_id == "panel4-reset-view":
+            figure.update_layout(
+                uirevision=f"reset-{reset_clicks}",
+                xaxis_autorange=True,
+                yaxis_autorange=True,
+            )
+        return metrics, figure, table, source, description
 
 
 if __name__ == "__main__":

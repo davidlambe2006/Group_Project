@@ -785,6 +785,190 @@ def p1_update_panel1(
     return html.Div(output)
 
 
+# Integrated dashboard
+
+
+def p1_comparison_data(companies, period="3 Years", benchmarks=None, *, load_prices=p1_get_prices):
+    """One real-price/normalisation path for both Panel 1 views.
+
+    Preserve the original lookback, adjusted closes and shared-date indexing.
+    """
+    tickers = list(dict.fromkeys(list(companies) + list(benchmarks or [])))
+    start = date.today() - timedelta(days=round(int(period.split()[0]) * 365.25))
+    prices = load_prices(tickers, start.isoformat(), (date.today() + timedelta(days=1)).isoformat())
+    missing = [ticker for ticker in tickers if ticker not in prices or prices[ticker].isna().all()]
+    prices = prices.drop(columns=missing, errors="ignore")
+    if not any(ticker in prices for ticker in companies):
+        raise ValueError("No selected AI companies have available data.")
+    indexed = p1_index_and_normalise(prices)
+    if len(indexed) < 3:
+        raise ValueError("Not enough shared historical data to compare.")
+    return indexed, missing
+
+
+def p1_create_app(*, parse_selection, load_prices=p1_get_prices, **kwargs):
+    app = Dash(__name__, **kwargs, include_assets_files=False)
+    dropdown_style = {"color": "#0B1220"}
+
+    def control(label, element):
+        return html.Label([html.Div(label, style={"marginBottom": "8px"}), element])
+
+    app.layout = html.Div(
+        [
+            dcc.Location(id="p1-url", refresh=False),
+            html.H2("Panel 1 — AI Stock Performance (3D)"),
+            html.P(
+                "How have AI-related companies performed relative to the wider stock market?"
+            ),
+            dcc.Store(id="p1-companies", data=list(TICKERS)),
+            html.Div(
+                [
+                    control(
+                        "Historical Period",
+                        dcc.Dropdown(
+                            id="p1-period",
+                            options=["1 Year", "3 Years", "5 Years", "10 Years"],
+                            value="3 Years",
+                            clearable=False,
+                            style=dropdown_style,
+                        ),
+                    ),
+                    control(
+                        "Market Benchmarks",
+                        dcc.Dropdown(
+                            id="p1-benchmarks",
+                            options=list(BENCHMARKS),
+                            value=["SPY", "QQQ"],
+                            multi=True,
+                            style=dropdown_style,
+                        ),
+                    ),
+                    control(
+                        "Chart Detail",
+                        dcc.Dropdown(
+                            id="p1-detail",
+                            options=["Daily", "Every 5 Days", "Every 20 Days"],
+                            value="Every 5 Days",
+                            clearable=False,
+                            style=dropdown_style,
+                        ),
+                    ),
+                ],
+                className="p1-controls",
+                style={
+                    "display": "grid",
+                    "gridTemplateColumns": "repeat(3,minmax(0,1fr))",
+                    "gap": "20px",
+                    "marginTop": "18px",
+                },
+            ),
+            html.Button(
+                "Refresh Yahoo data",
+                id="p1-refresh",
+                n_clicks=0,
+                style={"marginTop": "14px"},
+            ),
+            dcc.Loading(html.Div(id="p1-result")),
+        ],
+        style={
+            "background": DARK_BLUE,
+            "color": "white",
+            "padding": "24px",
+            "fontFamily": "Arial, sans-serif",
+            "minHeight": "100vh",
+            "boxSizing": "border-box",
+        },
+    )
+
+    @app.callback(
+        Output("p1-companies", "data"),
+        Input("p1-url", "search"),
+    )
+    def use_header_selection(search):
+        # Opened from the overview: start from the companies chosen in the header.
+        chosen = parse_selection(search)
+        return list(TICKERS) if chosen is None else chosen
+
+    @app.callback(
+        Output("p1-result", "children"),
+        Input("p1-companies", "data"),
+        Input("p1-period", "value"),
+        Input("p1-benchmarks", "value"),
+        Input("p1-detail", "value"),
+        Input("p1-refresh", "n_clicks"),
+    )
+    def update(companies, period, benchmarks, detail, _refresh):
+        if not companies:
+            return html.P("Please select at least one AI company.", role="status")
+        try:
+            indexed, missing = p1_comparison_data(companies, period, benchmarks, load_prices=load_prices)
+            stats = p1_calculate_statistics(indexed)
+            step = {"Daily": 1, "Every 5 Days": 5, "Every 20 Days": 20}[detail]
+            sampled = indexed.iloc[::step]
+            if sampled.index[-1] != indexed.index[-1]:
+                sampled = pd.concat([sampled, indexed.iloc[[-1]]])
+            cards = [html.H4("Total Return")]
+            for i, ticker in enumerate(indexed.columns):
+                colour = p1_ticker_colour(ticker, i)
+                cards.append(
+                    html.Div(
+                        [
+                            html.Span(
+                                f"{COMPANIES.get(ticker, BENCHMARKS.get(ticker, ticker))} ({ticker})"
+                            ),
+                            html.Strong(
+                                f"{stats.loc[ticker, 'Total Return (%)']:+,.1f}%",
+                                style={"color": colour, "whiteSpace": "nowrap"},
+                            ),
+                        ],
+                        style={
+                            "background": CARD,
+                            "borderLeft": f"4px solid {colour}",
+                            "borderRadius": "7px",
+                            "padding": "12px",
+                            "marginBottom": "8px",
+                            "display": "flex",
+                            "justifyContent": "space-between",
+                            "gap": "10px",
+                            "fontSize": "13px",
+                        },
+                    )
+                )
+            return [
+                None,
+                (
+                    html.P("Data unavailable for: " + ", ".join(missing))
+                    if missing
+                    else None
+                ),
+                html.Div(
+                    [
+                        dcc.Graph(
+                            figure=p1_build_chart_3d(sampled),
+                            config={"responsive": True, "displaylogo": False},
+                            style={"minWidth": 0},
+                        ),
+                        html.Div(cards),
+                    ],
+                    className="p1-chart-row",
+                    style={
+                        "display": "grid",
+                        "gridTemplateColumns": "minmax(0,3fr) minmax(220px,1fr)",
+                        "gap": "20px",
+                    },
+                ),
+                html.Small(
+                    f"Source: Yahoo Finance via yfinance | Actual comparison period: {indexed.index[0]:%d %b %Y} to {indexed.index[-1]:%d %b %Y} | Prices adjusted for stock splits and dividends."
+                ),
+            ]
+        except Exception as error:
+            return html.P(
+                f"Unable to load historical stock data. {error} Use Refresh Yahoo data to retry.",
+                role="alert",
+            )
+
+    return app
+
 # RUN DASH APPLICATION
 
 if __name__ == "__main__":

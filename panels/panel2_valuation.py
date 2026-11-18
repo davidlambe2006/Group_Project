@@ -919,5 +919,175 @@ def p2_show_panel2(selected_tickers=tickers):
     app.run(debug=False)
 
 
+# Integrated dashboard
+
+def p2_create_app(selected_tickers=tickers, *, parse_selection, load_valuations=p2_load_valuation_data, **kwargs):
+    app = Dash(__name__, **kwargs, include_assets_files=False)
+    tab_style = {
+        "backgroundColor": CARD,
+        "color": "white",
+        "border": "1px solid #1E3A5F",
+        "padding": "12px",
+    }
+    selected_tab_style = {
+        **tab_style,
+        "backgroundColor": "#FFFFFF",
+        "color": "#0B1220",
+        "fontWeight": "bold",
+        "borderTop": "2px solid #00D4FF",
+    }
+    app.layout = html.Div(
+        [
+            dcc.Location(id="p2-url", refresh=False),
+            html.Button("Refresh Yahoo data", id="valuation-refresh", n_clicks=0),
+            dcc.Tabs(
+                id="view-toggle",
+                value="graph",
+                children=[
+                    dcc.Tab(
+                        label="Graph",
+                        value="graph",
+                        style=tab_style,
+                        selected_style=selected_tab_style,
+                    ),
+                    dcc.Tab(
+                        label="Table",
+                        value="table",
+                        style=tab_style,
+                        selected_style=selected_tab_style,
+                    ),
+                ],
+                style={"width": "220px", "margin": "0 auto"},
+            ),
+            dcc.Loading(html.Div(id="view-content")),
+        ],
+        style={
+            "backgroundColor": "#0B1220",
+            "minHeight": "100vh",
+            "margin": "0",
+            "padding": "8px 0",
+            "color": "white",
+            "fontFamily": "Arial",
+        },
+    )
+
+    @app.callback(
+        Output("view-content", "children"),
+        Input("view-toggle", "value"),
+        Input("valuation-refresh", "n_clicks"),
+        Input("p2-url", "search"),
+    )
+    def update_view(view, _refresh, search):
+        chosen = parse_selection(search)
+        chosen = list(TICKERS) if chosen is None else chosen
+        if not chosen:
+            return html.P("Please select at least one company in the universal selector.", role="status")
+        df, failed_tickers = load_valuations(selected_tickers)
+        df = df[df["Ticker"].isin(chosen)]
+        chart_df = p2_prepare_chart_data(df)
+        if chart_df.empty:
+            return html.P(
+                "Yahoo Finance returned no valid company metrics. Please retry.",
+                role="alert",
+            )
+        omitted = df.loc[~df["Ticker"].isin(chart_df["Ticker"]), "Ticker"].tolist()
+        if omitted:
+            print("Omitted due to missing/invalid metrics: " + ", ".join(omitted))
+        regression = p2_calculate_regression(chart_df)
+        if regression[2] is None:
+            print("Insufficient valid data or variation to calculate regression.")
+        else:
+            print(f"R-squared: {regression[2]:.6f}")
+        fig = p2_build_valuation_chart(chart_df, regression, show_inset=True)
+        table_df = chart_df[
+            [
+                "Ticker",
+                "Company",
+                "Sector",
+                "Capital Expenditure ($B)",
+                "Annual Revenue ($B)",
+                "Market Cap ($T)",
+            ]
+        ].sort_values("Ticker")
+        table_df = table_df.rename(
+            columns={
+                "Capital Expenditure ($B)": "CapEx ($B)",
+                "Annual Revenue ($B)": "Revenue ($B)",
+            }
+        )
+        numeric_table_cols = ["CapEx ($B)", "Revenue ($B)", "Market Cap ($T)"]
+        if view == "graph":
+            return html.Div(
+                [
+                    None,
+                    dcc.Graph(
+                        figure=fig,
+                        style={"width": "100%", "height": "calc(100vh - 30px)"},
+                        config={
+                            "responsive": True,
+                            "displayModeBar": False,
+                            "displaylogo": False
+                        },
+                    ),
+                ]
+            )
+        else:
+            return html.Div(
+                [
+                    None,
+                    html.H2(
+                        "The AI Bubble: Company Comparison",
+                        style={"textAlign": "center", "padding": "25px"},
+                    ),
+                    dash_table.DataTable(
+                        data=table_df.to_dict("records"),
+                        columns=[
+                            {
+                                "name": col,
+                                "id": col,
+                                "type": (
+                                    "numeric" if col in numeric_table_cols else "text"
+                                ),
+                                "format": (
+                                    {"specifier": ",.2f"}
+                                    if col in numeric_table_cols
+                                    else {}
+                                ),
+                            }
+                            for col in table_df.columns
+                        ],
+                        sort_action="native",
+                        page_action="none",
+                        style_table={
+                            "width": "95%",
+                            "margin": "auto",
+                            "overflowX": "auto",
+                        },
+                        style_header={
+                            "backgroundColor": CARD,
+                            "color": "white",
+                            "fontWeight": "bold",
+                            "border": "1px solid #2D5474",
+                            "padding": "15px",
+                        },
+                        style_cell={
+                            "backgroundColor": CARD,
+                            "color": "white",
+                            "border": "1px solid #23445E",
+                            "padding": "14px",
+                            "textAlign": "left",
+                            "fontFamily": "Arial",
+                            "fontSize": "14px",
+                        },
+                        style_data_conditional=[
+                            {"if": {"row_index": "odd"}, "backgroundColor": CARD}
+                        ],
+                    ),
+                ]
+            )
+
+    return app
+
+
 if __name__ == '__main__':
     p2_show_panel2()
