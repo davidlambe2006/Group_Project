@@ -12,6 +12,9 @@ Internet is required for market data; the simulator also accepts manual inputs.
 
 """
 
+import sys
+sys.dont_write_bytecode = True
+
 import argparse
 import threading
 import time
