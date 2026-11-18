@@ -280,45 +280,21 @@ These libraries must be installed before the application can run.
 | **Flask** | Provides the underlying web server used by Dash. |
 | **Matplotlib** | Provides additional Python plotting functionality imported by the application. |
 
-### Recommended Installation Method
-The complete dependency list is:
 
-```text
-dash
-plotly
-yfinance
-pandas
-numpy
-flask
-matplotlib
-```
+
 ### Installing Dependencies
 
-All required Python libraries are listed in the `requirements.txt` file.
+All required Python libraries are listed in `requirements.txt`.
 
-With the virtual environment activated, run the following command from the `Group_Project` directory:
+With the terminal open in `Group_Project` and the virtual environment activated, run:
 
 ```powershell
 python -m pip install -r requirements.txt
 ```
 
-This automatically installs the packages necessary to run the dashboard.
+This installs the packages required to run the dashboard.
 
-To confirm that the dependencies are installed correctly, run:
-
-```powershell
-python -c "import dash, plotly, yfinance, pandas, numpy, flask, matplotlib; print('All dependencies installed successfully')"
-```
-
-If successful, the terminal will display:
-
-```text
-All dependencies installed successfully
-```
-
-The application is now ready to launch.
-
----
+Once installation is complete, proceed to launching the application.
 
 # 4. Launching the Dashboard
 
