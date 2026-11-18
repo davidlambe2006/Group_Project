@@ -5,9 +5,9 @@ Run:     python panels/panel4_simulator.py
 Open:    http://127.0.0.1:8056
 
 Embed in the team's Dash app (no server starts when imported):
-    from panels.panel4_simulator import create_layout, register_callbacks
-    app.layout = html.Div([other_panels, create_layout()])
-    register_callbacks(app)
+    from panels.panel4_simulator import p4_create_layout, p4_register_callbacks
+    app.layout = html.Div([other_panels, p4_create_layout()])
+    p4_register_callbacks(app)
 
 All data loading, calculations, layout and callbacks are in this file.
 """
@@ -47,7 +47,7 @@ COMPANIES = {
 _cache = {}
 
 
-def positive_number(value, label):
+def p4_positive_number(value, label):
     try:
         value = float(value)
     except (TypeError, ValueError) as error:
@@ -57,7 +57,7 @@ def positive_number(value, label):
     return value
 
 
-def load_company_data(company, force=False):
+def p4_load_company_data(company, force=False):
     """Return real, dated inputs. Never substitute fictional numbers on failure."""
     if company not in COMPANIES:
         raise ValueError("Choose a company from the list.")
@@ -68,8 +68,8 @@ def load_company_data(company, force=False):
     ticker = COMPANIES[company]
     stock = yf.Ticker(ticker)
     info = stock.get_info()
-    price = positive_number(info.get("regularMarketPrice"), "the share price")
-    stamp = positive_number(info.get("regularMarketTime"), "the quote timestamp")
+    price = p4_positive_number(info.get("regularMarketPrice"), "the share price")
+    stamp = p4_positive_number(info.get("regularMarketTime"), "the quote timestamp")
     quote_date = datetime.fromtimestamp(stamp, timezone.utc).strftime("%d %b %Y %H:%M UTC")
     currency = info.get("currency")
     financial_currency = info.get("financialCurrency")
@@ -83,13 +83,13 @@ def load_company_data(company, force=False):
     if revenues.empty:
         raise ValueError("Yahoo did not provide an annual revenue figure.")
     revenue_date = revenues.index[0].strftime("%d %b %Y")
-    reported_revenue = positive_number(revenues.iloc[0], "annual revenue")
+    reported_revenue = p4_positive_number(revenues.iloc[0], "annual revenue")
 
     # Alphabet's class-A shares alone exclude other share classes. The implied
     # count includes all classes. For TSM, Yahoo already gives ADS-equivalent shares.
     share_value = info.get("impliedSharesOutstanding") or info.get("sharesOutstanding")
-    shares = positive_number(share_value, "total equivalent shares")
-    market_cap = positive_number(info.get("marketCap"), "market capitalisation")
+    shares = p4_positive_number(share_value, "total equivalent shares")
+    market_cap = p4_positive_number(info.get("marketCap"), "market capitalisation")
     if abs(shares * price / market_cap - 1) > .10:
         raise ValueError("Yahoo's price and share units disagree. Refresh to retry.")
 
@@ -102,7 +102,7 @@ def load_company_data(company, force=False):
         closes = history["Close"].dropna()
         if closes.empty:
             raise ValueError("The FX series has no valid closing rate.")
-        fx_rate = positive_number(closes.iloc[-1], "the currency conversion rate")
+        fx_rate = p4_positive_number(closes.iloc[-1], "the currency conversion rate")
         fx_date = closes.index[-1].strftime("%d %b %Y")
         fx_note = f"1 {financial_currency} = {fx_rate:.6f} USD | {fx_symbol} | {fx_date}. FX held constant."
 
@@ -120,14 +120,14 @@ def load_company_data(company, force=False):
     }
     _cache[company] = (time.monotonic(), data)
     return data.copy()
-def percent_to_decimal(percent):
+def p4_percent_to_decimal(percent):
     """Convert a percentage, such as 20, into 0.20."""
     if not isinstance(percent, (int, float)) or not isfinite(percent):
         raise ValueError("Enter a finite percentage.")
     return percent / 100
 
 
-def calculate_valuation(revenue, shares, current_price, growth, margin, pe, years):
+def p4_calculate_valuation(revenue, shares, current_price, growth, margin, pe, years):
     """Project a future price with constant shares and no dividends."""
     values = (revenue, shares, current_price, growth, margin, pe, years)
     if any(isinstance(value, bool) or not isinstance(value, (int, float))
@@ -158,23 +158,23 @@ def calculate_valuation(revenue, shares, current_price, growth, margin, pe, year
     return result
 
 
-def value_for(data, assumptions):
+def p4_value_for(data, assumptions):
     """Project price and annual return from constant growth, margin, shares and P/E."""
-    return calculate_valuation(
+    return p4_calculate_valuation(
         data["revenue"], data["shares"], data["current_price"],
-        percent_to_decimal(assumptions["growth"]),
-        percent_to_decimal(assumptions["margin"]), assumptions["pe"], assumptions["years"],
+        p4_percent_to_decimal(assumptions["growth"]),
+        p4_percent_to_decimal(assumptions["margin"]), assumptions["pe"], assumptions["years"],
     )
 
-def heatmap_data(data, assumptions):
+def p4_heatmap_data(data, assumptions):
     """Recalculate the selected scenario across growth and margin assumptions."""
     growth = sorted(set([0, 10, 20, 30, 40, 50, assumptions["growth"]]))
     margins = sorted(set([15, 20, 25, 30, 35, 40, assumptions["margin"]]))
-    results = [[value_for(data, {**assumptions, "growth": g, "margin": m})
+    results = [[p4_value_for(data, {**assumptions, "growth": g, "margin": m})
                 for g in growth] for m in margins]
     return growth, margins, results
 
-def scenario_options(selected="Base"):
+def p4_scenario_options(selected="Base"):
     """Clearly mark the active scenario with colour and a text label."""
     descriptions = {"Bear": "Cautious", "Base": "Central", "Bull": "Optimistic"}
     colours = {"Bear": "#ffb47d", "Base": CYAN, "Bull": "#8ce6ae"}
@@ -206,7 +206,7 @@ def scenario_options(selected="Base"):
     return options
 
 
-def create_layout():
+def p4_create_layout():
     """Return Panel 4's layout for a standalone or shared Dash app."""
     return html.Div([
         dcc.Store(id="panel4-data", storage_type="memory"),
@@ -233,7 +233,7 @@ def create_layout():
                 dcc.Loading(html.Div(id="panel4-status", role="status",
                                     style={"fontSize": "13px", "marginBottom": "16px"})),
                 html.H3("Scenario", style={"margin": "12px 0 8px"}),
-                dcc.RadioItems(id="panel4-scenario", options=scenario_options(), value="Base",
+                dcc.RadioItems(id="panel4-scenario", options=p4_scenario_options(), value="Base",
                                style={"display": "grid", "gap": "6px", "color": WHITE},
                                inputStyle={"accentColor": CYAN, "margin": "0 8px 0 0",
                                            "width": "17px", "height": "17px", "flexShrink": "0"},
@@ -283,7 +283,7 @@ def create_layout():
                             "boxSizing": "border-box"})
 
 
-def make_heatmap(data, assumptions):
+def p4_make_heatmap(data, assumptions):
     """Use the same valuation for chart cells, tooltips and headline metrics."""
     figure = go.Figure()
     figure.update_layout(
@@ -295,7 +295,7 @@ def make_heatmap(data, assumptions):
         figure.add_annotation(text="Select a company or refresh Yahoo data", showarrow=False,
                               x=.5, y=.5, xref="paper", yref="paper")
         return figure
-    growth, margins, results = heatmap_data(data, assumptions)
+    growth, margins, results = p4_heatmap_data(data, assumptions)
     returns = [[result["annual_return"] * 100 for result in row] for row in results]
     prices = [[result["price"] for result in row] for row in results]
     limit = max(15, max(abs(value) for row in returns for value in row))
@@ -351,13 +351,13 @@ def make_heatmap(data, assumptions):
     return figure
 
 
-def update_company_data(company, trigger, previous):
+def p4_update_company_data(company, trigger, previous):
     """Keep each browser's Yahoo company data in its own dcc.Store."""
     saved = previous if previous and previous.get("company") == company else None
     try:
-        data = load_company_data(company, force=trigger == "panel4-refresh")
+        data = p4_load_company_data(company, force=trigger == "panel4-refresh")
         for scenario in SCENARIOS.values():
-            heatmap_data(data, scenario)
+            p4_heatmap_data(data, scenario)
         return data, f'{data["mode"]} | Retrieved {data["retrieved"]}'
     except Exception as error:
         status = f"Could not update data: {error} "
@@ -365,14 +365,14 @@ def update_company_data(company, trigger, previous):
         return saved, status
 
 
-def render_results(data, scenario):
+def p4_render_results(data, scenario):
     assumptions = SCENARIOS[scenario]
     description = (f'Growth: {assumptions["growth"]}% / year | '
                    f'Net margin: {assumptions["margin"]}% | '
                    f'P/E: {assumptions["pe"]}x | Period: {assumptions["years"]} years')
     if not data:
-        return [], make_heatmap(None, assumptions), [], "No company figures loaded.", description
-    result = value_for(data, assumptions)
+        return [], p4_make_heatmap(None, assumptions), [], "No company figures loaded.", description
+    result = p4_value_for(data, assumptions)
     metrics = []
     for title, value in [
         ("Current price (USD)", f'${data["current_price"]:,.2f}'),
@@ -383,7 +383,7 @@ def render_results(data, scenario):
                                 style={"border": f"1px solid {LINE}", "padding": "14px", "flex": "1 1 180px"}))
     rows = []
     for name, values in SCENARIOS.items():
-        outcome = value_for(data, values)
+        outcome = p4_value_for(data, values)
         cells = [name, f'{values["growth"]}%', f'{values["margin"]}%', values["pe"],
                  values["years"], f'${outcome["price"]:,.2f}', f'{outcome["annual_return"]:+.1%}']
         rows.append(html.Tr([html.Td(value, style={"padding": "10px"}) for value in cells]))
@@ -398,18 +398,18 @@ def render_results(data, scenario):
         html.Div(f'Quote: {data["quote_date"]} | Annual period ended: {data["revenue_date"]}'),
         html.Div(data["share_note"]), html.Div(data["fx_note"]),
     ])
-    return metrics, make_heatmap(data, assumptions), table, source, description
+    return metrics, p4_make_heatmap(data, assumptions), table, source, description
 
 
-def register_callbacks(app):
+def p4_register_callbacks(app):
     """Register Panel 4's callbacks."""
 
     @app.callback(
         Output("panel4-scenario", "options"),
         Input("panel4-scenario", "value"),
     )
-    def highlight_scenario(scenario):
-        return scenario_options(scenario)
+    def p4_highlight_scenario(scenario):
+        return p4_scenario_options(scenario)
 
     @app.callback(
         Output("panel4-data", "data"),
@@ -418,8 +418,8 @@ def register_callbacks(app):
         Input("panel4-refresh", "n_clicks"),
         State("panel4-data", "data"),
     )
-    def update_data(company, _refresh, previous):
-        return update_company_data(company, ctx.triggered_id, previous)
+    def p4_update_data(company, _refresh, previous):
+        return p4_update_company_data(company, ctx.triggered_id, previous)
 
     @app.callback(
         Output("panel4-metrics", "children"),
@@ -431,8 +431,8 @@ def register_callbacks(app):
         Input("panel4-scenario", "value"),
         Input("panel4-reset-view", "n_clicks"),
     )
-    def update_results(data, scenario, reset_clicks):
-        metrics, figure, table, source, description = render_results(data, scenario)
+    def p4_update_results(data, scenario, reset_clicks):
+        metrics, figure, table, source, description = p4_render_results(data, scenario)
         if ctx.triggered_id == "panel4-reset-view":
             figure.update_layout(
                 uirevision=f"reset-{reset_clicks}",
@@ -442,15 +442,15 @@ def register_callbacks(app):
         return metrics, figure, table, source, description
 
 
-def create_app():
+def p4_create_app():
     """Build the standalone app without fetching data or starting a server on import."""
     app = Dash(__name__, title="Panel 4 - AI Valuation Simulator")
-    app.layout = create_layout()
-    register_callbacks(app)
+    app.layout = p4_create_layout()
+    p4_register_callbacks(app)
     return app
 
 
-def open_when_ready(url, timeout=30):
+def p4_open_when_ready(url, timeout=30):
     """Open the browser after Dash responds, allowing up to 30 seconds to start."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -468,9 +468,9 @@ def open_when_ready(url, timeout=30):
 
 
 if __name__ == "__main__":
-    app = create_app()
+    app = p4_create_app()
     print("Starting Panel 4. Your browser will open when Dash is ready. "
           "Keep this terminal running.")
-    threading.Thread(target=open_when_ready, args=("http://127.0.0.1:8056",),
+    threading.Thread(target=p4_open_when_ready, args=("http://127.0.0.1:8056",),
                      daemon=True).start()
     app.run(debug=False, host="127.0.0.1", port=8056)

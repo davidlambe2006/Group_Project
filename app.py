@@ -34,7 +34,7 @@ from dash import Dash, Input, Output, State, ctx, dcc, html, dash_table, no_upda
 from dash.exceptions import PreventUpdate
 
 from panels.panel4_simulator import CYAN
-from panels import panel3_dotcom as panel3
+from panels.panel3_dotcom import p3_create_app, p3_render_panel3
 from panels.dashboard_shared import COMPANIES, TICKERS, NAVY as SHARED_NAVY, CARD, BORDER, GRID, apply_theme
 
 stock_COMPANIES = dict(COMPANIES)
@@ -2235,7 +2235,7 @@ def overview_figure(panel, companies=None):
             raise ValueError("Yahoo Finance metrics unavailable. Open panel to retry.")
         figure = p2_build_valuation_chart(cleaned, p2_calculate_regression(cleaned))
     elif panel == 3:
-        figure = panel3.render_panel3(chosen)
+        figure = p3_render_panel3(chosen)
     else:
         data = p4_load_company_data("NVIDIA")
         figure = p4_make_heatmap(data, p4_SCENARIOS["Base"])
@@ -2245,7 +2245,7 @@ def overview_figure(panel, companies=None):
 def create_app():
     server = Flask(__name__)
     panel_apps = []
-    for number, factory in enumerate([p1_create_app, p2_create_app, panel3.create_app], 1):
+    for number, factory in enumerate([p1_create_app, p2_create_app, p3_create_app], 1):
         panel_apps.append(
             factory(
                 server=server,

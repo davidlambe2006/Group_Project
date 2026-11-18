@@ -6,7 +6,7 @@ import numpy as np
 #Library for historical share prices
 import yfinance as yf
 
-#Libraries for the dashboard and interactive graphs
+#Libraries for the dashboard and interactive
 from dash import Dash, dcc, html, Input, Output
 import plotly.graph_objects as go
 #Python tools for handling dates
@@ -54,6 +54,19 @@ STOCK_COLOURS = [
 ]
 CARD_BLUE = CARD
 TEXT_MUTED = "#A8B9CF"
+# Colours follow the ticker rather than its position, so a company keeps its
+# colour as the selection changes.
+COLOUR_BY_TICKER = dict(zip(
+    ["NVDA", "MSFT", "GOOGL", "AMZN", "META", "AMD", "SPY", "QQQ", "TSM", "ORCL", "PLTR", "ASML"],
+    [STOCK_COLOURS[i] for i in [0, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 13]]
+))
+
+
+def p1_ticker_colour(ticker, position):
+    """Colour for a ticker; falls back to its position in the palette."""
+    return COLOUR_BY_TICKER.get(
+        ticker, STOCK_COLOURS[position % len(STOCK_COLOURS)]
+    )
 
 PERIOD_OPTIONS = [
     "1 Year",
@@ -70,7 +83,7 @@ DETAIL_OPTIONS = [
 
 # Downloading Stock Data with yfinance
 
-def get_prices(tickers, start, end):
+def p1_get_prices(tickers, start, end):
     """
     Fetches historical stock prices for the given tickers and date range.
 
@@ -122,7 +135,7 @@ def get_prices(tickers, start, end):
 
 #Indexing and Normalising Stock Prices
 
-def index_and_normalise(prices):
+def p1_index_and_normalise(prices):
     """
     Index historical stock prices to a common starting value of 100.
 
@@ -156,7 +169,7 @@ def index_and_normalise(prices):
 
 # Financial Performance Statistics
 
-def calculate_statistics(indexed_prices):
+def p1_calculate_statistics(indexed_prices):
     """
     Calculate historical returns, volatility and maximum drawdown.
 
@@ -218,7 +231,7 @@ def calculate_statistics(indexed_prices):
 # INTERACTIVE 3D STOCK PERFORMANCE CHART
 
 
-def build_chart_3d(indexed_prices):
+def p1_build_chart_3d(indexed_prices):
     """
     Create an interactive 3D chart of indexed stock performance.
 
@@ -250,7 +263,7 @@ def build_chart_3d(indexed_prices):
     baseline = 100
 
     for number, ticker in enumerate(indexed_prices.columns):
-        colour = STOCK_COLOURS[number % len(STOCK_COLOURS)]
+        colour = p1_ticker_colour(ticker, number)
         z_values = indexed_prices[ticker].values
         y_level = number
 
@@ -326,7 +339,7 @@ def build_chart_3d(indexed_prices):
         paper_bgcolor=DARK_BLUE,
         font=dict(color="white"),
         height=620,
-        margin=dict(l=0, r=0, t=50, b=0),
+        margin=dict(l=0, r=0, t=50, b=55),
 
         scene=dict(
             xaxis=dict(
@@ -390,7 +403,7 @@ def build_chart_3d(indexed_prices):
 
 # DASH DASHBOARD AND INTERACTIVE CONTROLS
 
-def create_panel1_layout():
+def p1_create_panel1_layout():
 
     return html.Div([
 
@@ -488,7 +501,7 @@ def create_panel1_layout():
 
 app = Dash(__name__, title="AI Boom Dashboard")
 
-app.layout = create_panel1_layout()
+app.layout = p1_create_panel1_layout()
 
 
 # DASH CALLBACK
@@ -500,7 +513,7 @@ app.layout = create_panel1_layout()
     Input("panel1_benchmarks", "value"),
     Input("panel1_detail", "value")
 )
-def update_panel1(
+def p1_update_panel1(
     selected_companies,
     period,
     selected_benchmarks,
@@ -529,7 +542,7 @@ def update_panel1(
 
     # Download stock prices
     try:
-        prices = get_prices(
+        prices = p1_get_prices(
             tickers,
             start_date.isoformat(),
             end_date.isoformat()
@@ -564,7 +577,7 @@ def update_panel1(
         )
 
     # Normalise prices
-    indexed_prices = index_and_normalise(prices)
+    indexed_prices = p1_index_and_normalise(prices)
 
     if len(indexed_prices) < 3:
         return html.P(
@@ -572,7 +585,7 @@ def update_panel1(
         )
 
     # Calculate performance statistics
-    statistics = calculate_statistics(indexed_prices)
+    statistics = p1_calculate_statistics(indexed_prices)
 
     # Select chart detail
     if detail == "Daily":
@@ -593,7 +606,7 @@ def update_panel1(
 
     # LEFT COLUMN: 3D stock performance graph
 
-    figure = build_chart_3d(chart_prices)
+    figure = p1_build_chart_3d(chart_prices)
 
     chart_col = html.Div(
         dcc.Graph(
@@ -617,9 +630,7 @@ def update_panel1(
 
     for number, ticker in enumerate(indexed_prices.columns):
 
-        colour = STOCK_COLOURS[
-            number % len(STOCK_COLOURS)
-        ]
+        colour = p1_ticker_colour(ticker, number)
 
         total_return = statistics.loc[
             ticker, "Total Return (%)"
