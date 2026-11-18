@@ -32,7 +32,7 @@ PINK = "#FB7185"
 # ---------------------------------------
 
 @lru_cache(maxsize=1)
-def trading_session_closes(session_date):
+def p3_trading_session_closes(session_date):
     # The date is the cache key: refresh the schedule on each New York day.
     # Yahoo's schedule includes holidays and early closing times.
     try:
@@ -49,7 +49,7 @@ def trading_session_closes(session_date):
 
 
 @lru_cache(maxsize=32)
-def download_prices(tickers, start, end=None):
+def p3_download_prices(tickers, start, end=None):
     try:
         data = yf.download(
             list(tickers),
@@ -103,7 +103,7 @@ def download_prices(tickers, start, end=None):
 # 2. CALCULATE PORTFOLIOS
 # ---------------------------------------
 
-def calculate_ai_portfolio(selected_companies, start_date="2023-01-01"):
+def p3_calculate_ai_portfolio(selected_companies, start_date="2023-01-01"):
 
     selected = list(dict.fromkeys(selected_companies))
 
@@ -116,7 +116,7 @@ def calculate_ai_portfolio(selected_companies, start_date="2023-01-01"):
         raise ValueError(f"Unknown companies: {invalid}")
 
     now = pd.Timestamp.now(tz="America/New_York")
-    closes = trading_session_closes(now.strftime("%Y-%m-%d"))
+    closes = p3_trading_session_closes(now.strftime("%Y-%m-%d"))
     completed = closes[closes <= now]
     if completed.empty:
         raise ValueError("No completed trading session is available. Please retry shortly.")
@@ -125,7 +125,7 @@ def calculate_ai_portfolio(selected_companies, start_date="2023-01-01"):
         completed.max().tz_convert("America/New_York").normalize()
         + pd.DateOffset(days=1)
     ).strftime("%Y-%m-%d")
-    prices = download_prices(
+    prices = p3_download_prices(
         tuple(sorted(selected)), start_date, end_date
     )
 
@@ -146,9 +146,9 @@ def calculate_ai_portfolio(selected_companies, start_date="2023-01-01"):
 
 
 @lru_cache(maxsize=1)
-def calculate_nasdaq():
+def p3_calculate_nasdaq():
 
-    prices = download_prices(
+    prices = p3_download_prices(
         ("^IXIC",), "1995-01-01", "2004-01-01"
     )
 
@@ -157,7 +157,7 @@ def calculate_nasdaq():
     return close / close.iloc[0] * 100
 
 
-def calculate_metrics(series):
+def p3_calculate_metrics(series):
 
     cumulative_return = (
         series.iloc[-1] / series.iloc[0] - 1
@@ -176,7 +176,7 @@ def calculate_metrics(series):
 # 3. ILLUSTRATIVE FORECASTS
 # ---------------------------------------
 
-def create_forecast(start_value, target_return, months=24):
+def p3_create_forecast(start_value, target_return, months=24):
 
     t = np.arange(months + 1)
 
@@ -204,7 +204,7 @@ def create_forecast(start_value, target_return, months=24):
 # 4. BUILD THE PLOTLY GRAPH
 # ---------------------------------------
 
-def monthly_with_latest(series):
+def p3_monthly_with_latest(series):
     monthly = series.resample("MS").first().dropna()
     # Keep monthly samples, adding the actual latest observation only if new.
     latest_date = series.index[-1]
@@ -225,21 +225,21 @@ def monthly_with_latest(series):
     return monthly, x
 
 
-def render_panel3(selected_companies=None):
+def p3_render_panel3(selected_companies=None):
 
     if selected_companies is None:
         selected_companies = DEFAULT_AI_COMPANIES
 
-    nasdaq = calculate_nasdaq()
+    nasdaq = p3_calculate_nasdaq()
 
-    ai = calculate_ai_portfolio(selected_companies)
+    ai = p3_calculate_ai_portfolio(selected_companies)
 
-    nasdaq_return, nasdaq_dd = calculate_metrics(nasdaq)
-    ai_return, ai_dd = calculate_metrics(ai)
+    nasdaq_return, nasdaq_dd = p3_calculate_metrics(nasdaq)
+    ai_return, ai_dd = p3_calculate_metrics(ai)
 
     # Monthly observations
-    nasdaq_monthly, nasdaq_x = monthly_with_latest(nasdaq)
-    ai_monthly, ai_x = monthly_with_latest(ai)
+    nasdaq_monthly, nasdaq_x = p3_monthly_with_latest(nasdaq)
+    ai_monthly, ai_x = p3_monthly_with_latest(ai)
 
     # Rebase displayed monthly series to 100
     nasdaq_monthly = (
@@ -326,7 +326,7 @@ def render_panel3(selected_companies=None):
 
     for name, target_return, colour in scenarios:
 
-        forecast_y = create_forecast(
+        forecast_y = p3_create_forecast(
             last_value, target_return
         )
 
@@ -476,9 +476,9 @@ def render_panel3(selected_companies=None):
 # 7. DASH HEADER AND METRICS
 # ---------------------------------------
 
-def nasdaq_crash_detail():
+def p3_nasdaq_crash_detail():
     # Identify the daily peak and trough behind the historical drawdown KPI.
-    nasdaq = calculate_nasdaq()
+    nasdaq = p3_calculate_nasdaq()
     drawdown = nasdaq / nasdaq.cummax() - 1
     trough_date = drawdown.idxmin()
     peak_date = nasdaq.loc[:trough_date].idxmax()
@@ -541,7 +541,7 @@ def nasdaq_crash_detail():
     return detail
 
 
-def metric_card(label, value, colour, date_range=None):
+def p3_metric_card(label, value, colour, date_range=None):
 
     return html.Div(
         [
@@ -581,7 +581,7 @@ def metric_card(label, value, colour, date_range=None):
     )
 
 
-def panel3_layout(selected_companies=None):
+def p3_layout(selected_companies=None):
 
     if selected_companies is None:
         selected_companies = DEFAULT_AI_COMPANIES
@@ -593,8 +593,8 @@ def panel3_layout(selected_companies=None):
         )
 
     try:
-        fig = render_panel3(selected_companies)
-        crash_detail = nasdaq_crash_detail()
+        fig = p3_render_panel3(selected_companies)
+        crash_detail = p3_nasdaq_crash_detail()
     except ValueError as error:
         return html.P(
             f"Unable to load Panel 3. {error}",
@@ -627,24 +627,24 @@ def panel3_layout(selected_companies=None):
 
             html.Div(
                 [
-                    metric_card(
+                    p3_metric_card(
                         "NASDAQ PRICE RETURN",
                         f"{metrics['nasdaq_return']:+.1f}%",
                         GREEN if metrics['nasdaq_return'] >= 0 else PINK,
                         metrics['nasdaq_period']
                     ),
-                    metric_card(
+                    p3_metric_card(
                         "NASDAQ MAX DRAWDOWN",
                         f"{metrics['nasdaq_dd']:.1f}%",
                         PINK, metrics['nasdaq_period']
                     ),
-                    metric_card(
+                    p3_metric_card(
                         "AI PORTFOLIO RETURN",
                         f"{metrics['ai_return']:+.1f}%",
                         GREEN if metrics['ai_return'] >= 0 else PINK,
                         metrics['ai_period']
                     ),
-                    metric_card(
+                    p3_metric_card(
                         "AI MAX DRAWDOWN",
                         f"{metrics['ai_dd']:.1f}%",
                         PINK, metrics['ai_period']
@@ -710,7 +710,7 @@ def panel3_layout(selected_companies=None):
 # 8. DASHBOARD INTEGRATION
 # ---------------------------------------
 
-def selection_from_search(search):
+def p3_selection_from_search(search):
     """Read the universal selector's iframe URL; preserve an explicit empty list."""
     query = parse_qs((search or "").lstrip("?"), keep_blank_values=True)
     if "companies" not in query:
@@ -723,7 +723,7 @@ def selection_from_search(search):
     ))
 
 
-def create_app(**kwargs):
+def p3_create_app(**kwargs):
     """Mount under /panel/3/ using the host dashboard's companies query string."""
     app = Dash(__name__, include_assets_files=False, **kwargs)
     app.layout = html.Div(
@@ -743,13 +743,13 @@ def create_app(**kwargs):
         Output("panel3-content", "children"),
         Input("panel3-url", "search")
     )
-    def update_panel(search):
+    def p3_update_panel(search):
         # Failed Yahoo requests raise ValueError and are not cached. Reloading
-        # or changing the universal selection retries through panel3_layout.
-        return panel3_layout(selection_from_search(search))
+        # or changing the universal selection retries through p3_layout.
+        return p3_layout(p3_selection_from_search(search))
 
     return app
 
 
 if __name__ == "__main__":
-    create_app().run(debug=True)
+    p3_create_app().run(debug=True)
