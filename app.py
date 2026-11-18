@@ -2150,7 +2150,9 @@ def compact_figure(figure, panel):
         margin=dict(l=55, r=24, t=38, b=48), uirevision=f"overview-{panel}")
     if panel == 1:
         figure.update_layout(margin=dict(l=0, r=0, t=30, b=8),
-            scene=dict(domain=dict(x=[0, 1], y=[0, 0.94]), camera=dict(eye=dict(x=1.4, y=-1.7, z=1.0))),
+            scene=dict(domain=dict(x=[0, 1], y=[0, 0.94]),
+            aspectratio=dict(x=2.2, y=1.0, z=0.8),
+            camera=dict(eye=dict(x=1.4, y=-2.6, z=1.1))),
             legend=dict(orientation="h", x=0.02, xanchor="left", y=1.02,
                         yanchor="bottom", font=dict(size=9), bgcolor=SHARED_NAVY))
         figure.update_scenes(xaxis_title_font_size=11, yaxis_title_font_size=11, zaxis_title_font_size=11,
