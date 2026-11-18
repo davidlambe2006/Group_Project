@@ -6,7 +6,7 @@ import numpy as np
 #Library for historical share prices
 import yfinance as yf
 
-#Libraries for the dashboard and interactive graphs
+#Libraries for the dashboard and interactive
 from dash import Dash, dcc, html, Input, Output
 import plotly.graph_objects as go
 #Python tools for handling dates
@@ -54,6 +54,19 @@ STOCK_COLOURS = [
 ]
 CARD_BLUE = CARD
 TEXT_MUTED = "#A8B9CF"
+# Colours follow the ticker rather than its position, so a company keeps its
+# colour as the selection changes.
+COLOUR_BY_TICKER = dict(zip(
+    ["NVDA", "MSFT", "GOOGL", "AMZN", "META", "AMD", "SPY", "QQQ", "TSM", "ORCL", "PLTR", "ASML"],
+    [STOCK_COLOURS[i] for i in [0, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 13]]
+))
+
+
+def ticker_colour(ticker, position):
+    """Colour for a ticker; falls back to its position in the palette."""
+    return COLOUR_BY_TICKER.get(
+        ticker, STOCK_COLOURS[position % len(STOCK_COLOURS)]
+    )
 
 PERIOD_OPTIONS = [
     "1 Year",
@@ -250,7 +263,7 @@ def build_chart_3d(indexed_prices):
     baseline = 100
 
     for number, ticker in enumerate(indexed_prices.columns):
-        colour = STOCK_COLOURS[number % len(STOCK_COLOURS)]
+        colour = ticker_colour(ticker, number)
         z_values = indexed_prices[ticker].values
         y_level = number
 
@@ -326,7 +339,7 @@ def build_chart_3d(indexed_prices):
         paper_bgcolor=DARK_BLUE,
         font=dict(color="white"),
         height=620,
-        margin=dict(l=0, r=0, t=50, b=0),
+        margin=dict(l=0, r=0, t=50, b=55),
 
         scene=dict(
             xaxis=dict(
@@ -617,9 +630,7 @@ def update_panel1(
 
     for number, ticker in enumerate(indexed_prices.columns):
 
-        colour = STOCK_COLOURS[
-            number % len(STOCK_COLOURS)
-        ]
+        colour = ticker_colour(ticker, number)
 
         total_return = statistics.loc[
             ticker, "Total Return (%)"
