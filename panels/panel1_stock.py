@@ -228,7 +228,47 @@ def p1_calculate_statistics(indexed_prices):
     return statistics
 
 
+
+# One download-and-normalise path, shared by the full panel and the overview
+
+def p1_comparison_data(companies, period="3 Years", benchmarks=None):
+    """
+    Download, clean and index prices for the companies plus any benchmarks.
+
+    Returns
+    -------
+    tuple
+        (indexed_prices, missing_tickers). Raises ValueError when there is
+        not enough data to compare.
+    """
+
+    tickers = list(dict.fromkeys(list(companies) + list(benchmarks or [])))
+
+    start = date.today() - timedelta(
+        days=round(int(period.split()[0]) * 365.25)
+    )
+    end = date.today() + timedelta(days=1)
+
+    prices = p1_get_prices(tickers, start.isoformat(), end.isoformat())
+
+    # Identify tickers with no usable prices.
+    missing = [
+        ticker for ticker in tickers
+        if ticker not in prices or prices[ticker].isna().all()
+    ]
+    prices = prices.drop(columns=missing, errors="ignore")
+
+    if not any(ticker in prices for ticker in companies):
+        raise ValueError("No selected AI companies have available data.")
+
+    indexed = p1_index_and_normalise(prices)
+
+    if len(indexed) < 3:
+        raise ValueError("Not enough shared historical data to compare.")
+
+    return indexed, missing
 # INTERACTIVE 3D STOCK PERFORMANCE CHART
+
 
 
 def p1_build_chart_3d(indexed_prices):
@@ -400,6 +440,26 @@ def p1_build_chart_3d(indexed_prices):
     )
     return fig
 
+
+# FIGURE FOR THE DASHBOARD OVERVIEW
+
+def p1_render(companies):
+    """
+    Build the Panel 1 chart for the overview grid.
+
+    Uses the companies chosen in the dashboard header, both benchmarks,
+    three years of history and every fifth trading day.
+    """
+
+    indexed, _missing = p1_comparison_data(companies, "3 Years", list(BENCHMARKS))
+
+    sampled = indexed.iloc[::5]
+
+    # Include the latest observation
+    if sampled.index[-1] != indexed.index[-1]:
+        sampled = pd.concat([sampled, indexed.iloc[[-1]]])
+
+    return p1_build_chart_3d(sampled)
 
 # DASH DASHBOARD AND INTERACTIVE CONTROLS
 
