@@ -3,6 +3,7 @@ import plotly.express as px
 import pandas as pd
 import numpy as np
 from dash import Dash, dcc, html, dash_table, Input, Output
+import plotly.graph_objects as go
 
 
 
@@ -31,7 +32,7 @@ sector_map = {
 NUMERIC_COLS = ['Market Cap ($T)', 'Capital Expenditure ($B)', 'Annual Revenue ($B)']
 
 
-def load_valuation_data(selected_tickers):
+def p2_load_valuation_data(selected_tickers):
     """Download Yahoo Finance financial metrics for the requested companies.
 
     A failed ticker is recorded with missing values so other tickers still load.
@@ -121,7 +122,7 @@ def load_valuation_data(selected_tickers):
         'Company', 'Ticker', *NUMERIC_COLS, 'Sector'
     ]), failed_tickers
 
-def prepare_chart_data(df):
+def p2_prepare_chart_data(df):
     """Remove missing/invalid bubble inputs."""
 
     cleaned = df.copy()
@@ -138,7 +139,7 @@ def prepare_chart_data(df):
     return chart_df
 
 
-def calculate_regression(chart_df):
+def p2_calculate_regression(chart_df):
     """Fit annual revenue against capital expenditure; return fit statistics."""
     # Using the displayed companies keeps the line consistent with the bubbles.
     x = chart_df['Capital Expenditure ($B)']
@@ -156,7 +157,7 @@ def calculate_regression(chart_df):
     return slope, intercept, r_squared, x
 
 # Create the bubble chart
-def create_bubble_scatter(chart_df, size_max):
+def p2_create_bubble_scatter(chart_df, size_max):
     """Create the bubble chart using company financial metrics."""
 
     fig = px.scatter(
@@ -197,7 +198,7 @@ def create_bubble_scatter(chart_df, size_max):
     return fig
 
 # Add regression line
-def add_regression_line(fig, slope, intercept, x):
+def p2_add_regression_line(fig, slope, intercept, x):
     """Add the fitted regression line when sufficient data exists."""
 
     if slope is not None:
@@ -222,14 +223,14 @@ def add_regression_line(fig, slope, intercept, x):
 
 
 # Style chart and add titles
-def style_valuation_chart(fig):
+def p2_style_valuation_chart(fig):
     """Apply the dark theme, axes, sector legend and subtitles."""
 
     fig.update_layout(
         template='plotly_dark',
         paper_bgcolor='#0B1220',
         plot_bgcolor='#0B1220',
-        margin=dict(r=250, t=170),
+        margin=dict(r=300, t=145, l=80, b=70),
         title=dict(
             x=.5,
             font=dict(size=24, weight='bold')
@@ -262,14 +263,7 @@ def style_valuation_chart(fig):
             font_color='white',
             bordercolor='#00D4FF'
         ),
-        legend=dict(
-            title='<b>Sector</b>',
-            x=1.02,
-            y=1.08,
-            bgcolor='#061426',
-            bordercolor='#1E3A5F',
-            borderwidth=2
-        )
+        showlegend=False
     )
 
     # Subtitle
@@ -294,8 +288,77 @@ def style_valuation_chart(fig):
 
     return fig
 
+# Add custom sector legend
+def p2_add_sector_legend(fig, chart_df):
+    """Draw a cleaner custom sector legend."""
+
+    # Background box
+    fig.add_shape(
+        type='rect',
+        xref='paper', yref='paper',
+        x0=1.02, x1=1.20,
+        y0=0.77, y1=1.04,
+        line=dict(color='#1E3A5F', width=2),
+        fillcolor='#061426'
+    )
+
+    # Heading
+    fig.add_annotation(
+        x=1.11, y=0.995,
+        xref='paper', yref='paper',
+        xanchor='center',
+        yanchor='middle',
+        text='<b>Sector</b>',
+        showarrow=False,
+        font=dict(size=14, color='white')
+    )
+
+    sector_colours = {
+        'Semiconductors': '#00D4FF',
+        'Software & Cloud': '#FF6B6B',
+        'Internet Services': '#00E09F',
+        'Consumer & EV': '#B477FF'
+    }
+
+    # Only show sectors actually present
+    sectors = [
+        sector for sector in sector_colours
+        if sector in chart_df['Sector'].values
+    ]
+
+    # Tighter, cleaner spacing
+    y_positions = [0.925, 0.865, 0.805, 0.785]
+
+    for sector, y in zip(sectors, y_positions):
+        # coloured circle
+        fig.add_shape(
+            type='circle',
+            xref='paper', yref='paper',
+            xsizemode='pixel',
+            ysizemode='pixel',
+            xanchor=1.055,
+            yanchor=y,
+            x0=-7, x1=7,
+            y0=-7, y1=7,
+            line=dict(color='white', width=2),
+            fillcolor=sector_colours[sector]
+        )
+        # label
+        fig.add_annotation(
+            x=1.08, y=y,
+            xref='paper', yref='paper',
+            xanchor='left',
+            yanchor='middle',
+            text=sector,
+            showarrow=False,
+            font=dict(size=11, color='white')
+        )
+
+    return fig
+
+
 # Add market capitalisation legend
-def add_market_cap_legend(fig, chart_df, size_max):
+def p2_add_market_cap_legend(fig, chart_df, size_max):
     """Draw the custom reference legend for bubble sizes."""
 
     # Background box
@@ -303,14 +366,14 @@ def add_market_cap_legend(fig, chart_df, size_max):
         type='rect',
         xref='paper', yref='paper',
         x0=1.02, x1=1.20,
-        y0=0.32, y1=0.75,
+        y0=0.34, y1=0.75,
         line=dict(color='#1E3A5F', width=2),
         fillcolor='#061426'
     )
 
     # Legend heading
     fig.add_annotation(
-        x=1.105, y=0.725,
+        x=1.11, y=0.70,
         xanchor='center',
         xref='paper', yref='paper',
         text='<b>Market Cap ($T)</b>',
@@ -322,11 +385,11 @@ def add_market_cap_legend(fig, chart_df, size_max):
     max_cap = chart_df['Market Cap ($T)'].max()
 
     for cap, y in [
-        (0.5, 0.63),
-        (1.0, 0.525),
-        (2.0, 0.395)
+        (0.5, 0.61),
+        (1.0, 0.515),
+        (2.0, 0.405)
     ]:
-        size = size_max * np.sqrt(cap / max_cap)
+        size = size_max * 0.65 * np.sqrt(cap / max_cap)
 
         # Draw reference bubble
         fig.add_shape(
@@ -355,7 +418,7 @@ def add_market_cap_legend(fig, chart_df, size_max):
     return fig
 
 # Add regression information and On/Off toggle
-def add_regression_controls(fig, r_squared):
+def p2_add_regression_controls(fig, r_squared):
     """Display R-squared and add buttons to show/hide regression."""
 
     # Regression information background
@@ -471,81 +534,199 @@ def add_regression_controls(fig, r_squared):
 
     return fig
 
+def p2_add_small_company_inset(fig, chart_df):
+    """Zoomed comparison using the same financial data as the main chart."""
+
+    tickers = ["NVDA", "AMD", "ASML", "PLTR"]
+    small = chart_df[chart_df["Ticker"].isin(tickers)].copy()
+
+    if small.empty:
+        return fig
+
+    colours = {
+        "Semiconductors": "#00D4FF",
+        "Software & Cloud": "#FF6B6B",
+        "Internet Services": "#00E09F"
+    }
+
+    x_col = "Capital Expenditure ($B)"
+    y_col = "Annual Revenue ($B)"
+    cap_col = "Market Cap ($T)"
+
+    # Inset axes and positioning
+    fig.update_layout(
+        xaxis2=dict(
+            domain=[0.17, 0.45],
+            anchor="y2",
+            range=[-0.6, max(8, small[x_col].max() * 1.35)],
+            title=dict(
+                text="CapEx ($B)",
+                font=dict(size=10),
+                standoff=2
+            ),
+            tickfont=dict(size=10),
+            gridcolor="#1E3A5F",
+            showline=True,
+            linecolor="white",
+            zeroline=False,
+            automargin=False
+        ),
+        yaxis2=dict(
+            domain=[0.66, 0.88],
+            anchor="x2",
+            range=[-25, max(100, small[y_col].max() * 1.6)],
+            title=dict(
+                text="Revenue ($B)",
+                font=dict(size=10),
+                standoff=2
+            ),
+            tickfont=dict(size=10),
+            gridcolor="#1E3A5F",
+            showline=True,
+            linecolor="white",
+            zeroline=False,
+            automargin=False
+        )
+    )
+
+    # Background and turquoise border
+    fig.add_shape(
+        type="rect",
+        xref="paper",
+        yref="paper",
+        x0=0.10,
+        x1=0.50,
+        y0=0.55,
+        y1=0.99,
+        fillcolor="#061426",
+        line=dict(color="#00D4FF", width=2),
+        layer="below"
+    )
+
+    # Title inside the inset
+    fig.add_annotation(
+        x=0.30,
+        y=0.955,
+        xref="paper",
+        yref="paper",
+        xanchor="center",
+        yanchor="middle",
+        align="center",
+        text="<b>COMPANIES CLUSTER ZOOMED IN</b>",
+        showarrow=False,
+        font=dict(size=12, color="white")
+    )
+
+    # Scale bubble AREA by market capitalisation
+    max_cap = small[cap_col].max()
+    sizeref = 2 * max_cap / (46 ** 2)
+
+    label_offsets = {
+        "NVDA": (48, 0),
+        "AMD": (0, -45),
+        "ASML": (48, -22),
+        "PLTR": (0, -25)
+    }
+
+    for _, row in small.iterrows():
+        ticker = row["Ticker"]
+        x = float(row[x_col])
+        y = float(row[y_col])
+        cap = float(row[cap_col])
+
+        # Actual bubble, using proportional market cap
+        fig.add_trace(
+            go.Scatter(
+                x=[x],
+                y=[y],
+                xaxis="x2",
+                yaxis="y2",
+                mode="markers",
+                marker=dict(
+                    size=[cap],
+                    sizemode="area",
+                    sizeref=sizeref,
+                    sizemin=9,
+                    color=colours.get(row["Sector"], "white"),
+                    line=dict(color="white", width=2),
+                    opacity=1
+                ),
+                name=ticker,
+                showlegend=False,
+                customdata=[[cap]],
+                hovertemplate=(
+                    "<b>" + ticker + "</b><br>"
+                    "CapEx: $%{x:.2f}B<br>"
+                    "Revenue: $%{y:.2f}B<br>"
+                    "Market Cap: $%{customdata[0]:.2f}T"
+                    "<extra></extra>"
+                )
+            )
+        )
+
+        # Separate labels with subtle connector lines
+        ax, ay = label_offsets.get(ticker, (0, -25))
+
+        fig.add_annotation(
+            x=x,
+            y=y,
+            xref="x2",
+            yref="y2",
+            text="<b>" + ticker + "</b>",
+            showarrow=True,
+            ax=ax,
+            ay=ay,
+            arrowhead=0,
+            arrowwidth=1,
+            arrowcolor="#8CA5C0",
+            bgcolor="#061426",
+            borderpad=2,
+            font=dict(size=11, color="white")
+        )
+
+    return fig
+
+
 # Main function - combine all chart components
-def build_valuation_chart(chart_df, regression):
+def p2_build_valuation_chart(chart_df, regression, show_inset=False):
     """Build the complete interactive valuation chart."""
 
     slope, intercept, r_squared, x = regression
     size_max = 75
 
     # Create bubble chart
-    fig = create_bubble_scatter(chart_df, size_max)
+    fig = p2_create_bubble_scatter(chart_df, size_max)
 
     # Add fitted regression line
-    fig = add_regression_line(fig, slope, intercept, x)
+    fig = p2_add_regression_line(fig, slope, intercept, x)
 
     # Apply chart styling
-    fig = style_valuation_chart(fig)
+    fig = p2_style_valuation_chart(fig)
+    
+    # Add custom sector legend
+    fig = p2_add_sector_legend(fig, chart_df)
 
     # Add market cap bubble-size legend
-    fig = add_market_cap_legend(fig, chart_df, size_max)
+    fig = p2_add_market_cap_legend(fig, chart_df, size_max)
 
     # Add regression information and toggle
-    fig = add_regression_controls(fig, r_squared)
+    fig = p2_add_regression_controls(fig, r_squared)
+
+    # Only add zoom inset when requested
+    if show_inset:
+        fig = p2_add_small_company_inset(fig, chart_df)
 
     return fig
 
 
     
-def show_panel2(selected_tickers=tickers):
+def p2_show_panel2(selected_tickers=tickers):
     """Run the valuation panel as a standalone Plotly chart."""
-    df, failed_tickers = load_valuation_data(selected_tickers)
-    chart_df = prepare_chart_data(df)
-
-    if chart_df.empty:
-        print('No valid company data is available for the bubble chart.')
-        if failed_tickers:
-            print('Downloads failed for: ' + ', '.join(failed_tickers))
-        return
-
-    omitted = df.loc[~df['Ticker'].isin(chart_df['Ticker']), 'Ticker'].tolist()
-    if omitted:
-        print('Omitted due to missing/invalid metrics: ' + ', '.join(omitted))
-
-    regression = calculate_regression(chart_df)
-    if regression[2] is None:
-        print('Insufficient valid data or variation to calculate regression.')
-    else:
-        print(f'R-squared: {regression[2]:.6f}')
-    
-    # Both views use the same selected companies.
-    fig = build_valuation_chart(chart_df, regression)
-
-    table_df = chart_df[[
-        'Ticker',
-        'Company',
-        'Sector',
-        'Capital Expenditure ($B)',
-        'Annual Revenue ($B)',
-        'Market Cap ($T)'
-    ]].sort_values('Ticker')
-
-    # Format the financial figures
-    table_df = table_df.rename(columns={
-        'Capital Expenditure ($B)': 'CapEx ($B)',
-        'Annual Revenue ($B)': 'Revenue ($B)'
-    })
-    numeric_table_cols = [
-        'CapEx ($B)',
-        'Revenue ($B)',
-        'Market Cap ($T)'
-    ]
-
     # Create the Dash app
     app = Dash(__name__)
 
     tab_style = {
-        'backgroundColor': '#131F31',
+        'backgroundColor': CARD,
         'color': 'white',
         'border': '1px solid #1E3A5F',
         'padding': '12px'
@@ -561,6 +742,11 @@ def show_panel2(selected_tickers=tickers):
 
     app.layout = html.Div(
         [
+            html.Button(
+                "Refresh Yahoo data",
+                id="valuation-refresh",
+                n_clicks=0
+            ),
             # Graph / Table toggle
             dcc.Tabs(
                 id='view-toggle',
@@ -586,7 +772,7 @@ def show_panel2(selected_tickers=tickers):
             ),
 
             # This area changes when the toggle is clicked
-            html.Div(id='view-content')
+            dcc.Loading(html.Div(id='view-content'))
         ],
         style={
             'backgroundColor': '#0B1220',
@@ -601,19 +787,73 @@ def show_panel2(selected_tickers=tickers):
     # Switch between the original graph and the table
     @app.callback(
         Output('view-content', 'children'),
-        Input('view-toggle', 'value')
+        Input('view-toggle', 'value'),
+        Input('valuation-refresh', 'n_clicks')
     )
-    def switch_view(view):
+    def p2_switch_view(view, _refresh):
+        df, failed_tickers = p2_load_valuation_data(selected_tickers)
+        chart_df = p2_prepare_chart_data(df)
+
+        if chart_df.empty:
+            return html.P(
+                'Yahoo Finance returned no valid company metrics. Please retry.',
+                role='alert'
+            )
+
+        omitted = df.loc[
+            ~df['Ticker'].isin(chart_df['Ticker']), 'Ticker'
+        ].tolist()
+
+        if omitted:
+            print('Omitted due to missing/invalid metrics: ' + ', '.join(omitted))
+
+        regression = p2_calculate_regression(chart_df)
+
+        if regression[2] is None:
+            print('Insufficient valid data or variation to calculate regression.')
+        else:
+            print(f'R-squared: {regression[2]:.6f}')
+
+        fig = build_valuation_chart(
+            chart_df, regression, show_inset=True
+        )
+
+        table_df = chart_df[
+            [
+                'Ticker',
+                'Company',
+                'Sector',
+                'Capital Expenditure ($B)',
+                'Annual Revenue ($B)',
+                'Market Cap ($T)'
+            ]
+        ].sort_values('Ticker')
+
+        table_df = table_df.rename(columns={
+            'Capital Expenditure ($B)': 'CapEx ($B)',
+            'Annual Revenue ($B)': 'Revenue ($B)'
+        })
+
+        numeric_table_cols = [
+            'CapEx ($B)',
+            'Revenue ($B)',
+            'Market Cap ($T)'
+        ]
 
         if view == 'graph':
             return dcc.Graph(
                 figure=fig,
                 style={
                     'width': '100%',
-                    'height': 'calc(100vh - 65px)'
+                    'height': 'calc(100vh - 30px)'
                 },
-                config={'responsive': True}
+                config={
+                    'responsive': True,
+                    'displayModeBar': False,
+                    'displaylogo': False
+                }
             )
+       
 
         else:
             return html.Div(
@@ -648,7 +888,7 @@ def show_panel2(selected_tickers=tickers):
                         },
 
                         style_header={
-                            'backgroundColor': '#131F31',
+                            "backgroundColor": CARD,
                             'color': 'white',
                             'fontWeight': 'bold',
                             'border': '1px solid #2D5474',
@@ -656,7 +896,7 @@ def show_panel2(selected_tickers=tickers):
                         },
 
                         style_cell={
-                            'backgroundColor': '#131F31',
+                            "backgroundColor": CARD,
                             'color': 'white',
                             'border': '1px solid #23445E',
                             'padding': '14px',
@@ -668,7 +908,7 @@ def show_panel2(selected_tickers=tickers):
                         style_data_conditional=[
                             {
                                 'if': {'row_index': 'odd'},
-                                'backgroundColor': '#131F31'
+                                "backgroundColor": CARD
                             }
                         ]
                     )
@@ -680,4 +920,4 @@ def show_panel2(selected_tickers=tickers):
 
 
 if __name__ == '__main__':
-    show_panel2()
+    p2_show_panel2()
