@@ -814,7 +814,7 @@ def p2_show_panel2(selected_tickers=tickers):
         else:
             print(f'R-squared: {regression[2]:.6f}')
 
-        fig = build_valuation_chart(
+        fig = p2_build_valuation_chart(
             chart_df, regression, show_inset=True
         )
 
