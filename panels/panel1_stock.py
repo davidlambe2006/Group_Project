@@ -54,6 +54,19 @@ STOCK_COLOURS = [
 ]
 CARD_BLUE = CARD
 TEXT_MUTED = "#A8B9CF"
+CYAN = "#20e3e8"
+WHITE = "#f3f5fa"
+MUTED = "#aabed0"
+
+# Panel 4's dropdown theme: dark background, white text, cyan highlight
+DROPDOWN_STYLE = {
+    "color": WHITE,
+    "--Dash-Fill-Inverse-Strong": DARK_BLUE,
+    "--Dash-Text-Strong": WHITE,
+    "--Dash-Text-Weak": MUTED,
+    "--Dash-Stroke-Strong": BORDER,
+    "--Dash-Fill-Interactive-Strong": CYAN,
+}
 # Colours follow the ticker rather than its position, so a company keeps its
 # colour as the selection changes.
 COLOUR_BY_TICKER = dict(zip(
@@ -485,7 +498,8 @@ def p1_create_panel1_layout():
                 for ticker, name in COMPANIES.items()
             ],
             value=DEFAULT_COMPANIES,
-            multi=True
+            multi=True,
+            style=DROPDOWN_STYLE
         ),
 
         # Three dashboard controls
@@ -501,7 +515,8 @@ def p1_create_panel1_layout():
                         "5 Years", "10 Years"
                     ],
                     value="3 Years",
-                    clearable=False
+                    clearable=False,
+                    style=DROPDOWN_STYLE
                 )
             ], style={"flex": "1", "minWidth": "200px"}),
 
@@ -515,7 +530,8 @@ def p1_create_panel1_layout():
                         for ticker, name in BENCHMARKS.items()
                     ],
                     value=["SPY", "QQQ"],
-                    multi=True
+                    multi=True,
+                    style=DROPDOWN_STYLE
                 )
             ], style={"flex": "1", "minWidth": "200px"}),
 
@@ -530,7 +546,8 @@ def p1_create_panel1_layout():
                         "Every 20 Days"
                     ],
                     value="Every 5 Days",
-                    clearable=False
+                    clearable=False,
+                    style=DROPDOWN_STYLE
                 )
             ], style={"flex": "1", "minWidth": "200px"})
 
@@ -808,7 +825,7 @@ def p1_comparison_data(companies, period="3 Years", benchmarks=None, *, load_pri
 
 def p1_create_app(*, parse_selection, load_prices=p1_get_prices, **kwargs):
     app = Dash(__name__, **kwargs, include_assets_files=False)
-    dropdown_style = {"color": "#0B1220"}
+    dropdown_style = DROPDOWN_STYLE
 
     def control(label, element):
         return html.Label([html.Div(label, style={"marginBottom": "8px"}), element])
