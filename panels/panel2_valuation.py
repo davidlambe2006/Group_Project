@@ -1,3 +1,11 @@
+# Panel 2: The AI Bubble - Capital Investment vs Revenue
+# Compares major technology companies using Yahoo Finance data.
+# Bubble position shows CapEx and annual revenue, while bubble size
+# represents market capitalisation. Includes regression analysis,
+# a company comparison table and an interactive zoomed-in chart.
+# Runs independently or as part of the four-panel dashboard.
+
+
 import yfinance as yf
 import plotly.express as px
 import pandas as pd
@@ -6,9 +14,9 @@ from dash import Dash, dcc, html, dash_table, Input, Output
 import plotly.graph_objects as go
 
 try:
-    from .dashboard_shared import COMPANIES as SHARED_COMPANIES, TICKERS, NAVY as SHARED_NAVY, CARD, BORDER, GRID
+    from .dashboard_shared import TICKERS, CARD, GRID
 except ImportError:
-    from dashboard_shared import COMPANIES as SHARED_COMPANIES, TICKERS, NAVY as SHARED_NAVY, CARD, BORDER, GRID
+    from dashboard_shared import TICKERS, CARD, GRID
 
 # Companies and sectors used for bubble colours.
 tickers = list(TICKERS)
@@ -48,6 +56,7 @@ def p2_load_valuation_data(selected_tickers):
 
             if not income.empty and not cashflow.empty:
                 if 'Total Revenue' in income.index and 'Capital Expenditure' in cashflow.index:
+                    # Use the latest year with valid figures to ensure a fair comparison.
                     common_years = income.columns.intersection(cashflow.columns)
                     for year in sorted(common_years, reverse=True):
                         rev = income.loc['Total Revenue', year]
@@ -63,7 +72,9 @@ def p2_load_valuation_data(selected_tickers):
                             if cap is not None and not market_currency:
                                  raise ValueError(f"Market cap currency unavailable for {ticker}")
                             
-                            # Convert revenue and CapEx using historical exchange rates
+                            # Convert revenue and CapEx into USD using a historical FX average.
+                            # Both figures are flows measured over a financial reporting period,
+                            # rather than values measured at one point in time.
                             fx_rate = 1.0
                             if currency != 'USD':
                                  fx_ticker = f"{currency}USD=X"
@@ -83,7 +94,8 @@ def p2_load_valuation_data(selected_tickers):
                             revenue = rev * fx_rate / 1e9
                             capex = abs(expenditure) * fx_rate / 1e9
                             
-                            # Convert market cap using a recent exchange rate
+                            # Market capitalisation is a current valuation, unlike annual revenue
+                            # and CapEx. Convert it using the latest available FX closing price.
                             if cap is not None and market_currency != 'USD':
                                 fx_ticker = f"{market_currency}USD=X"
                                 fx_data = yf.Ticker(fx_ticker).history(period='5d')
@@ -119,7 +131,11 @@ def p2_load_valuation_data(selected_tickers):
     ]), failed_tickers
 
 def p2_prepare_chart_data(df):
-    """Remove missing/invalid bubble inputs."""
+    """Clean financial data before plotting or regression.
+    
+    Remove companies with missing, infinite or non-positive metrics
+    so invalid values cannot distort the visualisation or analysis.
+    """
 
     cleaned = df.copy()
     cleaned[NUMERIC_COLS] = cleaned[NUMERIC_COLS].apply(
@@ -135,12 +151,20 @@ def p2_prepare_chart_data(df):
     return chart_df
 
 def p2_calculate_regression(chart_df):
-    """Fit annual revenue against capital expenditure; return fit statistics."""
+    """Calculate a simple linear regression of revenue against CapEx.
+    
+    NumPy fits the least-squares regression line. R-squared measurES
+    the proportion of variation in company revenue explained by the
+    fitted line within the selected company sample.
+    
+    Returns the slope, intercept, R-squared and CapEx values.
+    """
+
     # Using the displayed companies keeps the line consistent with the bubbles.
     x = chart_df['Capital Expenditure ($B)']
     y = chart_df['Annual Revenue ($B)']
 
-    # Require at least 3 companies and variation in both variables.
+    # Require at least 3 companies and varfiation in both variables.
     if len(x) < 3 or x.nunique() < 2 or y.nunique() < 2:
         return None, None, None, x
 
@@ -318,7 +342,7 @@ def p2_add_sector_legend(fig, chart_df):
     ]
 
     # Tighter, cleaner spacing
-    y_positions = [0.925, 0.865, 0.805, 0.785]
+    y_positions = [0.925, 0.865, 0.805]
 
     for sector, y in zip(sectors, y_positions):
         # coloured circle
@@ -707,10 +731,11 @@ def p2_build_valuation_chart(chart_df, regression, show_inset=False):
     return fig
 
 def p2_standalone_selection(search):
+    """Use all companies when Panel 2 runs outside the main dashboard."""
     return None
 
 # Integrated dashboard
-def p2_create_app(selected_tickers=tickers, *, parse_selection, load_valuations=p2_load_valuation_data, **kwargs):
+def p2_create_app(selected_tickers=tickers, *, pFarse_selection, load_valuations=p2_load_valuation_data, **kwargs):
     app = Dash(__name__, **kwargs, include_assets_files=False)
     tab_style = {
         "backgroundColor": CARD,
@@ -760,6 +785,8 @@ def p2_create_app(selected_tickers=tickers, *, parse_selection, load_valuations=
         },
     )
 
+    # Update Panel 2 when the user switches views, refreshes Yahoo
+    # data or changes the universal company selection.
     @app.callback(
         Output("view-content", "children"),
         Input("view-toggle", "value"),
