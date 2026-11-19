@@ -173,14 +173,17 @@ def compact_figure(figure, panel):
         paper_bgcolor=SHARED_NAVY, plot_bgcolor=SHARED_NAVY, font=dict(size=11),
         margin=dict(l=55, r=24, t=38, b=48), uirevision=f"overview-{panel}")
     if panel == 1:
-        figure.update_layout(margin=dict(l=0, r=0, t=30, b=8),
-            scene=dict(domain=dict(x=[0, 1], y=[0, 0.94]),
-            aspectratio=dict(x=2.2, y=1.0, z=0.8),
-            camera=dict(eye=dict(x=1.4, y=-2.6, z=1.1))),
-            legend=dict(orientation="h", x=0.02, xanchor="left", y=1.02,
-                        yanchor="bottom", font=dict(size=9), bgcolor=SHARED_NAVY))
-        figure.update_scenes(xaxis_title_font_size=11, yaxis_title_font_size=11, zaxis_title_font_size=11,
-                             xaxis_tickfont_size=9, yaxis_tickfont_size=9, zaxis_tickfont_size=9)
+        zoom = 1.0  # above 1 zooms out, below 1 zooms in
+        figure.update_layout(margin=dict(l=0, r=0, t=56, b=0),
+            scene=dict(domain=dict(x=[0, 1], y=[0, 1]),
+            aspectratio=dict(x=2.9, y=0.9, z=0.9),
+            camera=dict(eye=dict(x=0.35 * zoom, y=-1.99 * zoom, z=0.99 * zoom),
+            center=dict(x=0, y=0, z=-0.3))),
+            legend=dict(orientation="h", x=0.5, xanchor="center", y=1.0,
+                        yanchor="bottom", font=dict(size=13, color="white"), bgcolor=SHARED_NAVY))
+        figure.update_scenes(xaxis_title_font_size=12, yaxis_title_font_size=12, zaxis_title_font_size=12,
+                             xaxis_tickfont_size=11, zaxis_tickfont_size=11,
+                             yaxis_showticklabels=False)
     elif panel == 2:
         # Remove expanded-panel annotations and custom legend boxes
         figure.layout.annotations = []
