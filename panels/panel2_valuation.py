@@ -5,11 +5,9 @@ import numpy as np
 from dash import Dash, dcc, html, dash_table, Input, Output
 import plotly.graph_objects as go
 
-
-
 try:
     from .dashboard_shared import COMPANIES as SHARED_COMPANIES, TICKERS, NAVY as SHARED_NAVY, CARD, BORDER, GRID
-except ImportError:  # Direct execution of a panel demo.
+except ImportError:
     from dashboard_shared import COMPANIES as SHARED_COMPANIES, TICKERS, NAVY as SHARED_NAVY, CARD, BORDER, GRID
 
 # Companies and sectors used for bubble colours.
@@ -28,9 +26,7 @@ sector_map = {
     "ASML": "Semiconductors"
 }
 
-
 NUMERIC_COLS = ['Market Cap ($T)', 'Capital Expenditure ($B)', 'Annual Revenue ($B)']
-
 
 def p2_load_valuation_data(selected_tickers):
     """Download Yahoo Finance financial metrics for the requested companies.
@@ -138,7 +134,6 @@ def p2_prepare_chart_data(df):
     ]
     return chart_df
 
-
 def p2_calculate_regression(chart_df):
     """Fit annual revenue against capital expenditure; return fit statistics."""
     # Using the displayed companies keeps the line consistent with the bubbles.
@@ -170,7 +165,6 @@ def p2_create_bubble_scatter(chart_df, size_max):
             'Semiconductors': '#00D4FF',
             'Software & Cloud': '#FF6B6B',
             'Internet Services': '#00E09F',
-            'Consumer & EV': '#B477FF'
         },
         text='Ticker',
         size_max=size_max,
@@ -183,7 +177,6 @@ def p2_create_bubble_scatter(chart_df, size_max):
         },
         title='The AI Bubble: Capital Investment vs Revenue'
     )
-
 
     # Improve readability of bubbles and their labels
     fig.update_traces(
@@ -220,7 +213,6 @@ def p2_add_regression_line(fig, slope, intercept, x):
         )
 
     return fig
-
 
 # Style chart and add titles
 def p2_style_valuation_chart(fig):
@@ -317,7 +309,6 @@ def p2_add_sector_legend(fig, chart_df):
         'Semiconductors': '#00D4FF',
         'Software & Cloud': '#FF6B6B',
         'Internet Services': '#00E09F',
-        'Consumer & EV': '#B477FF'
     }
 
     # Only show sectors actually present
@@ -355,7 +346,6 @@ def p2_add_sector_legend(fig, chart_df):
         )
 
     return fig
-
 
 # Add market capitalisation legend
 def p2_add_market_cap_legend(fig, chart_df, size_max):
@@ -546,7 +536,6 @@ def p2_add_small_company_inset(fig, chart_df):
     colours = {
         "Semiconductors": "#00D4FF",
         "Software & Cloud": "#FF6B6B",
-        "Internet Services": "#00E09F"
     }
 
     x_col = "Capital Expenditure ($B)"
@@ -686,7 +675,6 @@ def p2_add_small_company_inset(fig, chart_df):
 
     return fig
 
-
 # Main function - combine all chart components
 def p2_build_valuation_chart(chart_df, regression, show_inset=False):
     """Build the complete interactive valuation chart."""
@@ -718,209 +706,10 @@ def p2_build_valuation_chart(chart_df, regression, show_inset=False):
 
     return fig
 
-
-    
-def p2_show_panel2(selected_tickers=tickers):
-    """Run the valuation panel as a standalone Plotly chart."""
-    # Create the Dash app
-    app = Dash(__name__)
-
-    tab_style = {
-        'backgroundColor': CARD,
-        'color': 'white',
-        'border': '1px solid #1E3A5F',
-        'padding': '12px'
-    }
-
-    selected_tab_style = {
-        **tab_style,
-        'backgroundColor': '#FFFFFF',
-        'color': '#0B1220',
-        'fontWeight': 'bold',
-        'borderTop': '2px solid #00D4FF'
-    }
-
-    app.layout = html.Div(
-        [
-            html.Button(
-                "Refresh Yahoo data",
-                id="valuation-refresh",
-                n_clicks=0
-            ),
-            # Graph / Table toggle
-            dcc.Tabs(
-                id='view-toggle',
-                value='graph',
-                children=[
-                    dcc.Tab(
-                        label='Graph',
-                        value='graph',
-                        style=tab_style,
-                        selected_style=selected_tab_style
-                    ),
-                    dcc.Tab(
-                        label='Table',
-                        value='table',
-                        style=tab_style,
-                        selected_style=selected_tab_style
-                    )
-                ],
-                style={
-                    'width': '220px',
-                    'margin': '0 auto'
-                }
-            ),
-
-            # This area changes when the toggle is clicked
-            dcc.Loading(html.Div(id='view-content'))
-        ],
-        style={
-            'backgroundColor': '#0B1220',
-            'minHeight': '100vh',
-            'margin': '0',
-            'padding': '8px 0',
-            'color': 'white',
-            'fontFamily': 'Arial'
-        }
-    )
-
-    # Switch between the original graph and the table
-    @app.callback(
-        Output('view-content', 'children'),
-        Input('view-toggle', 'value'),
-        Input('valuation-refresh', 'n_clicks')
-    )
-    def p2_switch_view(view, _refresh):
-        df, failed_tickers = p2_load_valuation_data(selected_tickers)
-        chart_df = p2_prepare_chart_data(df)
-
-        if chart_df.empty:
-            return html.P(
-                'Yahoo Finance returned no valid company metrics. Please retry.',
-                role='alert'
-            )
-
-        omitted = df.loc[
-            ~df['Ticker'].isin(chart_df['Ticker']), 'Ticker'
-        ].tolist()
-
-        if omitted:
-            print('Omitted due to missing/invalid metrics: ' + ', '.join(omitted))
-
-        regression = p2_calculate_regression(chart_df)
-
-        if regression[2] is None:
-            print('Insufficient valid data or variation to calculate regression.')
-        else:
-            print(f'R-squared: {regression[2]:.6f}')
-
-        fig = p2_build_valuation_chart(
-            chart_df, regression, show_inset=True
-        )
-
-        table_df = chart_df[
-            [
-                'Ticker',
-                'Company',
-                'Sector',
-                'Capital Expenditure ($B)',
-                'Annual Revenue ($B)',
-                'Market Cap ($T)'
-            ]
-        ].sort_values('Ticker')
-
-        table_df = table_df.rename(columns={
-            'Capital Expenditure ($B)': 'CapEx ($B)',
-            'Annual Revenue ($B)': 'Revenue ($B)'
-        })
-
-        numeric_table_cols = [
-            'CapEx ($B)',
-            'Revenue ($B)',
-            'Market Cap ($T)'
-        ]
-
-        if view == 'graph':
-            return dcc.Graph(
-                figure=fig,
-                style={
-                    'width': '100%',
-                    'height': 'calc(100vh - 30px)'
-                },
-                config={
-                    'responsive': True,
-                    'displayModeBar': False,
-                    'displaylogo': False
-                }
-            )
-       
-
-        else:
-            return html.Div(
-                [
-                    html.H2(
-                        'The AI Bubble: Company Comparison',
-                        style={
-                            'textAlign': 'center',
-                            'padding': '25px'
-                        }
-                    ),
-
-                    dash_table.DataTable(
-                        data=table_df.to_dict('records'),
-                        columns=[
-                            {
-                                'name': col,
-                                'id': col,
-                                'type': 'numeric' if col in numeric_table_cols else 'text',
-                                'format': {'specifier': ',.2f'} if col in numeric_table_cols else {}
-                            }
-                            for col in table_df.columns
-                        ],
-                    
-                        sort_action='native',
-                        page_action='none',
-
-                        style_table={
-                            'width': '95%',
-                            'margin': 'auto',
-                            'overflowX': 'auto'
-                        },
-
-                        style_header={
-                            "backgroundColor": CARD,
-                            'color': 'white',
-                            'fontWeight': 'bold',
-                            'border': '1px solid #2D5474',
-                            'padding': '15px'
-                        },
-
-                        style_cell={
-                            "backgroundColor": CARD,
-                            'color': 'white',
-                            'border': '1px solid #23445E',
-                            'padding': '14px',
-                            'textAlign': 'left',
-                            'fontFamily': 'Arial',
-                            'fontSize': '14px'
-                        },
-
-                        style_data_conditional=[
-                            {
-                                'if': {'row_index': 'odd'},
-                                "backgroundColor": CARD
-                            }
-                        ]
-                    )
-                ]
-            )
-
-    # Start the dashboard
-    app.run(debug=False)
-
+def p2_standalone_selection(search):
+    return None
 
 # Integrated dashboard
-
 def p2_create_app(selected_tickers=tickers, *, parse_selection, load_valuations=p2_load_valuation_data, **kwargs):
     app = Dash(__name__, **kwargs, include_assets_files=False)
     tab_style = {
@@ -1019,14 +808,12 @@ def p2_create_app(selected_tickers=tickers, *, parse_selection, load_valuations=
         if view == "graph":
             return html.Div(
                 [
-                    None,
                     dcc.Graph(
                         figure=fig,
                         style={"width": "100%", "height": "calc(100vh - 30px)"},
                         config={
                             "responsive": True,
                             "displayModeBar": False,
-                            "displaylogo": False
                         },
                     ),
                 ]
@@ -1034,7 +821,6 @@ def p2_create_app(selected_tickers=tickers, *, parse_selection, load_valuations=
         else:
             return html.Div(
                 [
-                    None,
                     html.H2(
                         "The AI Bubble: Company Comparison",
                         style={"textAlign": "center", "padding": "25px"},
@@ -1079,15 +865,14 @@ def p2_create_app(selected_tickers=tickers, *, parse_selection, load_valuations=
                             "fontFamily": "Arial",
                             "fontSize": "14px",
                         },
-                        style_data_conditional=[
-                            {"if": {"row_index": "odd"}, "backgroundColor": CARD}
-                        ],
                     ),
                 ]
             )
 
     return app
 
-
-if __name__ == '__main__':
-    p2_show_panel2()
+if __name__ == "__main__":
+    app = p2_create_app(
+        parse_selection=p2_standalone_selection
+    )
+    app.run(debug=False)

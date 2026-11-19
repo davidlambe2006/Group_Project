@@ -82,11 +82,7 @@ def global_panel_url(panel, selection):
         return f"/panel/{panel}/?{query}"
     return f"/panel/{panel}/"
 
-
-
 # Shared overview data cache
-
-
 def cached_market_data(function):
     responses = {}
     lock = threading.Lock()
