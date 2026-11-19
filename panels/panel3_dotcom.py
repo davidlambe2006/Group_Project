@@ -11,9 +11,9 @@ from dash import Dash, dcc, html, Input, Output
 
 
 try:
-    from .dashboard_shared import COMPANIES as SHARED_COMPANIES, TICKERS, NAVY as SHARED_NAVY, CARD, BORDER, GRID
+    from .dashboard_shared import TICKERS, NAVY as SHARED_NAVY
 except ImportError:  # Direct execution of a panel demo.
-    from dashboard_shared import COMPANIES as SHARED_COMPANIES, TICKERS, NAVY as SHARED_NAVY, CARD, BORDER, GRID
+    from dashboard_shared import TICKERS, NAVY as SHARED_NAVY
 
 # The universal ten-company universe, all selected by default.
 DEFAULT_AI_COMPANIES = list(TICKERS)
