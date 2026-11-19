@@ -735,7 +735,7 @@ def p2_standalone_selection(search):
     return None
 
 # Integrated dashboard
-def p2_create_app(selected_tickers=tickers, *, pFarse_selection, load_valuations=p2_load_valuation_data, **kwargs):
+def p2_create_app(selected_tickers=tickers, *, parse_selection, load_valuations=p2_load_valuation_data, **kwargs):
     app = Dash(__name__, **kwargs, include_assets_files=False)
     tab_style = {
         "backgroundColor": CARD,
