@@ -1,4 +1,4 @@
-"""Panel 4: self-contained Dash valuation simulator.
+﻿"""Panel 4: self-contained Dash valuation simulator.
 
 Install: python -m pip install dash plotly yfinance
 Run:     python panels/panel4_simulator.py
@@ -35,8 +35,7 @@ CYAN = "#20e3e8"
 WHITE = "#f3f5fa"
 MUTED = "#aabed0"
 LINE = "#354b60"
-BUTTON = {"backgroundColor": LINE, "color": WHITE, "border": "none",
-          "padding": "10px 14px", "cursor": "pointer", "margin": "12px 0"}
+
 SCENARIOS = {
     "Bear": dict(growth=10, margin=20, pe=30, years=5),
     "Base": dict(growth=20, margin=25, pe=30, years=5),
@@ -181,112 +180,11 @@ def p4_heatmap_data(data, assumptions):
     return growth, margins, results
 
 def p4_scenario_options(selected="Base"):
-    """Clearly mark the active scenario with colour and a text label."""
-    descriptions = {"Bear": "Cautious", "Base": "Central", "Bull": "Optimistic"}
-    colours = {"Bear": "#ffb47d", "Base": CYAN, "Bull": "#8ce6ae"}
-    options = []
-    for name, values in SCENARIOS.items():
-        active = name == selected
-        colour = colours[name]
-        options.append({"value": name, "label": html.Span([
-            html.Span([
-                html.Strong(f"{name} - {descriptions[name]}",
-                            style={"fontSize": "16px"}),
-                html.Small("SELECTED", style={
-                    "display": "inline-block" if active else "none",
-                    "backgroundColor": NAVY, "color": WHITE,
-                    "padding": "3px 6px", "borderRadius": "4px",
-                    "fontSize": "10px", "fontWeight": "bold", "letterSpacing": ".5px",
-                }),
-            ], style={"display": "flex", "alignItems": "center",
-                      "justifyContent": "space-between", "gap": "8px", "flexWrap": "wrap"}),
-            html.Small(f'{values["growth"]}% growth / {values["margin"]}% margin',
-                       style={"display": "block", "color": NAVY if active else MUTED,
-                              "marginTop": "5px"}),
-        ], style={"display": "block", "flex": "1", "padding": "11px 12px",
-                  "border": f"2px solid {colour if active else LINE}",
-                  "outline": f"2px solid {WHITE}" if active and name == "Base" else "none",
-                  "outlineOffset": "1px" if active and name == "Base" else "0",
-                  "borderRadius": "6px", "color": NAVY if active else WHITE,
-                  "backgroundColor": colour if active else NAVY})})
-    return options
+    return p4_integrated_scenario_options(selected)
 
 
 def p4_create_layout():
-    """Return Panel 4's layout for a standalone or shared Dash app."""
-    return html.Div([
-        dcc.Store(id="panel4-data", storage_type="memory"),
-        html.H2("04 | AI Valuation Simulator", style={"color": CYAN}),
-        html.Div([
-            html.Aside([
-                html.Label("Company", htmlFor="panel4-company"),
-                dcc.Dropdown( 
-                    id="panel4-company",
-                    options=list(COMPANIES),
-                    value="NVIDIA",
-                    clearable=False,
-                    style={
-                        "color": WHITE,
-                        "--Dash-Fill-Inverse-Strong": NAVY,
-                        "--Dash-Text-Strong": WHITE,
-                        "--Dash-Text-Weak": MUTED,
-                        "--Dash-Stroke-Strong": LINE,
-                        "--Dash-Fill-Interactive-Strong": CYAN,
-                    },
-                ),
-                html.Button("Refresh Yahoo data", id="panel4-refresh", n_clicks=0,
-                            style=BUTTON),
-                dcc.Loading(html.Div(id="panel4-status", role="status",
-                                    style={"fontSize": "13px", "marginBottom": "16px"})),
-                html.H3("Scenario", style={"margin": "12px 0 8px"}),
-                dcc.RadioItems(id="panel4-scenario", options=p4_scenario_options(), value="Base",
-                               style={"display": "grid", "gap": "6px", "color": WHITE},
-                               inputStyle={"accentColor": CYAN, "margin": "0 8px 0 0",
-                                           "width": "17px", "height": "17px", "flexShrink": "0"},
-                               labelStyle={"display": "flex", "alignItems": "center",
-                                           "cursor": "pointer", "color": WHITE}),
-                html.Div(id="panel4-assumptions", style={"margin": "16px 0"}),
-            ], style={"flex": "0 1 290px", "minWidth": "230px"}),
-            html.Main([
-                dcc.Loading(html.Div([
-                    html.Div(id="panel4-source", style={"display": "none"}),
-                    html.Div(id="panel4-metrics", style={"display": "flex", "flexWrap": "wrap",
-                                                          "gap": "12px", "margin": "18px 0"}),
-                    html.H3("Annual return sensitivity"),
-                    html.P("Turquoise = gain | White = 0% | Orange = loss. "
-                           "Solid outline = Base; dashed outline = selected scenario.",
-                           style={"color": MUTED, "fontSize": "13px"}),
-                    html.Button("Reset view", id="panel4-reset-view", n_clicks=0,
-                                style={**BUTTON, "margin": "0 0 8px"}),
-                    dcc.Graph(id="panel4-heatmap", config={
-                                  "displayModeBar": True, "displaylogo": False,
-                                  "modeBarButtons": [["zoomIn2d", "zoomOut2d", "resetScale2d"]],
-                                  "doubleClick": "reset",
-                              },
-                              style={"height": "480px"}),
-                    html.Details([
-                        html.Summary("Compare scenarios"),
-                        html.Div(id="panel4-comparison", style={"overflowX": "auto"}),
-                    ]),
-                ])),
-                html.Details([
-                    html.Summary("How it works", style={
-                        "cursor": "pointer", "fontWeight": "bold", "color": WHITE,
-                        "fontSize": "16px", "padding": "4px 0",
-                    }),
-                    html.P("Uses the selected company's Yahoo revenue, share count and current price. "
-                           "Bear / Base / Bull apply shared growth and margin assumptions to estimate "
-                           "a price in five years at 30x earnings and the annualised return from today's price.",
-                           style={"lineHeight": "1.5", "fontSize": "14px"}),
-                    html.Small("Illustrative estimates. Shares and FX stay fixed; dividends, fees and taxes are excluded.",
-                               style={"color": MUTED}),
-                ], style={"marginTop": "20px", "padding": "14px 16px",
-                          "border": f"1px solid {LINE}", "borderRadius": "6px"}),
-            ], style={"flex": "4 1 600px", "minWidth": "0"}),
-        ], style={"display": "flex", "flexWrap": "wrap", "gap": "28px"}),
-    ], id="panel4", style={"backgroundColor": NAVY, "color": WHITE,
-                            "fontFamily": "Arial, sans-serif", "padding": "24px",
-                            "boxSizing": "border-box"})
+    return p4_integrated_create_layout()
 
 
 def p4_make_heatmap(data, assumptions):
@@ -357,95 +255,13 @@ def p4_make_heatmap(data, assumptions):
     return figure
 
 
-def p4_update_company_data(company, trigger, previous):
-    """Keep each browser's Yahoo company data in its own dcc.Store."""
-    saved = previous if previous and previous.get("company") == company else None
-    try:
-        data = p4_load_company_data(company, force=trigger == "panel4-refresh")
-        for scenario in SCENARIOS.values():
-            p4_heatmap_data(data, scenario)
-        return data, f'{data["mode"]} | Retrieved {data["retrieved"]}'
-    except Exception as error:
-        status = f"Could not update data: {error} "
-        status += "Showing previous data." if saved else "Refresh Yahoo data to retry."
-        return saved, status
-
 
 def p4_render_results(data, scenario):
-    assumptions = SCENARIOS[scenario]
-    description = (f'Growth: {assumptions["growth"]}% / year | '
-                   f'Net margin: {assumptions["margin"]}% | '
-                   f'P/E: {assumptions["pe"]}x | Period: {assumptions["years"]} years')
-    if not data:
-        return [], p4_make_heatmap(None, assumptions), [], "No company figures loaded.", description
-    result = p4_value_for(data, assumptions)
-    metrics = []
-    for title, value in [
-        ("Current price (USD)", f'${data["current_price"]:,.2f}'),
-        (f'Est. price in {assumptions["years"]} years (USD)', f'${result["price"]:,.2f}'),
-        ("Est. annual return", f'{result["annual_return"]:+.1%}'),
-    ]:
-        metrics.append(html.Div([html.Div(title), html.Strong(value, style={"fontSize": "28px", "color": CYAN})],
-                                style={"border": f"1px solid {LINE}", "padding": "14px", "flex": "1 1 180px"}))
-    rows = []
-    for name, values in SCENARIOS.items():
-        outcome = p4_value_for(data, values)
-        cells = [name, f'{values["growth"]}%', f'{values["margin"]}%', values["pe"],
-                 values["years"], f'${outcome["price"]:,.2f}', f'{outcome["annual_return"]:+.1%}']
-        rows.append(html.Tr([html.Td(value, style={"padding": "10px"}) for value in cells]))
-    table = html.Table([
-        html.Thead(html.Tr([html.Th(label, style={"padding": "10px"}) for label in
-                              ["Scenario", "Growth", "Margin", "P/E", "Years", "Future price", "Annual return"]])),
-        html.Tbody(rows),
-    ], style={"width": "100%", "textAlign": "left"})
-    source = html.Div([
-        html.Div(f'{data["company"]} ({data["ticker"]}) | {data["source"]}'),
-        html.Div(f'Revenue: ${data["revenue"]/1e9:,.2f}bn | Equivalent shares: {data["shares"]/1e9:,.3f}bn'),
-        html.Div(f'Quote: {data["quote_date"]} | Annual period ended: {data["revenue_date"]}'),
-        html.Div(data["share_note"]), html.Div(data["fx_note"]),
-    ])
-    return metrics, p4_make_heatmap(data, assumptions), table, source, description
+    return p4_integrated_render_results(data, scenario)
 
 
 def p4_register_callbacks(app):
-    """Register Panel 4's callbacks."""
-
-    @app.callback(
-        Output("panel4-scenario", "options"),
-        Input("panel4-scenario", "value"),
-    )
-    def p4_highlight_scenario(scenario):
-        return p4_scenario_options(scenario)
-
-    @app.callback(
-        Output("panel4-data", "data"),
-        Output("panel4-status", "children"),
-        Input("panel4-company", "value"),
-        Input("panel4-refresh", "n_clicks"),
-        State("panel4-data", "data"),
-    )
-    def p4_update_data(company, _refresh, previous):
-        return p4_update_company_data(company, ctx.triggered_id, previous)
-
-    @app.callback(
-        Output("panel4-metrics", "children"),
-        Output("panel4-heatmap", "figure"),
-        Output("panel4-comparison", "children"),
-        Output("panel4-source", "children"),
-        Output("panel4-assumptions", "children"),
-        Input("panel4-data", "data"),
-        Input("panel4-scenario", "value"),
-        Input("panel4-reset-view", "n_clicks"),
-    )
-    def p4_update_results(data, scenario, reset_clicks):
-        metrics, figure, table, source, description = p4_render_results(data, scenario)
-        if ctx.triggered_id == "panel4-reset-view":
-            figure.update_layout(
-                uirevision=f"reset-{reset_clicks}",
-                xaxis_autorange=True,
-                yaxis_autorange=True,
-            )
-        return metrics, figure, table, source, description
+    return p4_integrated_register_callbacks(app)
 
 
 def p4_create_app():
