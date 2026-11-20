@@ -102,7 +102,7 @@ Chart Detail sets how many prices are plotted: Daily uses every trading day, Eve
 ### Figure 1(b)
 [Panel 1 running on its own, with the AI Companies dropdown](docs/panel1-standalone.png)
 
-![alt text]
+![alt text]![alt text](image.png)
 
 #### Reading the chart
 
