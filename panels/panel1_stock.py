@@ -11,7 +11,8 @@ from dash import Dash, dcc, html, Input, Output
 import plotly.graph_objects as go
 #Python tools for handling dates
 from datetime import date, timedelta
-
+import sys
+sys.dont_write_bytecode = True
 
 try:
     from .dashboard_shared import COMPANIES as SHARED_COMPANIES, TICKERS, NAVY as SHARED_NAVY, CARD, BORDER, GRID
@@ -999,6 +1000,8 @@ def p1_create_app(*, parse_selection, load_prices=p1_get_prices, **kwargs):
 # RUN DASH APPLICATION
 
 if __name__ == "__main__":
+    import logging
+    logging.getLogger("werkzeug").setLevel(logging.ERROR)
     app.run(debug=True, dev_tools_ui=False)
 
 
