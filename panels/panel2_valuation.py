@@ -698,6 +698,22 @@ def p2_add_small_company_inset(fig, chart_df):
             borderpad=2,
             font=dict(size=11, color="white")
         )
+        
+        # Arrow from inset towards the cluster at the origin
+        fig.add_annotation(
+            x=0.18,
+            y=0.40,
+            xref="paper",
+            yref="paper",
+            ax=65,
+            ay=-65,
+            text="",
+            showarrow=True,
+            arrowhead=2,
+            arrowsize=1.2,
+            arrowwidth=2.5,
+            arrowcolor="#00D4FF"
+        )
 
     return fig
 
