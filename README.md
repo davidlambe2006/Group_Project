@@ -141,6 +141,16 @@ Panel 3 compares the historical dot-com bubble with the modern AI boom to invest
 
 The aim is to visualise historical market behaviour rather than suggest that the current AI boom will necessarily follow the same trajectory as the dot-com bubble.
 
+#### How to use Panel 3
+
+1. **Select AI companies:** Use the universal company selector at the top of the dashboard to include or exclude any of the ten AI companies. Use **Select All** or **Deselect All** to change the entire selection.
+2. **Open Panel 3:** Click the AI Boom vs. Dot-Com Bubble chart on the dashboard overview to access its expanded view.
+3. **Compare historical performance:** Examine the NASDAQ dot-com period (blue) against the modern AI portfolio (green). Both begin at an indexed value of 100 and are aligned by months elapsed since their respective starting dates.
+4. **Explore the forecasts:** The dashed Bull (green), Base (purple) and Bear (red) lines show illustrative 24-month scenarios for the selected AI portfolio.
+5. **Review the performance metrics:** The four KPI cards display NASDAQ price return, NASDAQ maximum drawdown, AI portfolio return and AI maximum drawdown.
+6. **Examine the dot-com crash:** Scroll down to the second graph to see the NASDAQ's historical peak-to-trough decline between March 2000 and October 2002.
+7. **Interact with the charts:** Hover over the lines to inspect values, or change the company selection to see how the AI portfolio and its forecasts respond.
+
 #### Data collection and portfolio construction
 
 Historical price data is retrieved using Python's `yfinance` library. The panel compares the NASDAQ Composite Index from 1995–2003 with a portfolio of selected AI-related companies from January 2023 onwards.
