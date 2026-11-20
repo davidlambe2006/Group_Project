@@ -12,6 +12,8 @@ import pandas as pd
 import numpy as np
 from dash import Dash, dcc, html, dash_table, Input, Output
 import plotly.graph_objects as go
+import sys
+sys.dont_write_bytecode = True
 
 try:
     from .dashboard_shared import TICKERS, CARD, GRID
