@@ -104,13 +104,84 @@ The relationship does not establish that spending caused the revenue. Company re
 
 **Screenshots:** [Show the bubble chart with readable axes and regression information, followed by the financial table.]
 
-### Panel 3 — AI Boom vs Dot-Com Bubble
+### Panel 3 — AI Boom vs. Dot-Com Bubble
 
-Use the shared company selector to compare the AI portfolio **from 2023 onwards** with the **NASDAQ Composite during 1995–2003**. Inspect indexed performance, returns, and maximum drawdowns.
+#### Purpose and rationale
 
-The Bull, Base, and Bear paths are illustrative scenarios, not validated predictions. Similar historical patterns do not establish that the same outcomes will repeat.
+Panel 3 compares the historical dot-com bubble with the modern AI boom to investigate similarities and differences in stock market performance during two periods of rapid technological development.
 
-**Screenshot:** [Show the historical comparison, metrics, and scenario labels. State the companies selected.]
+The aim is to visualise historical market behaviour rather than suggest that the current AI boom will necessarily follow the same trajectory as the dot-com bubble.
+
+#### Data collection and portfolio construction
+
+Historical price data is retrieved using Python's `yfinance` library. The panel compares the NASDAQ Composite Index from 1995–2003 with a portfolio of selected AI-related companies from January 2023 onwards.
+
+Using `pandas`, the datasets are cleaned and aligned, with missing observations removed where necessary. All prices are indexed to a starting value of 100, allowing the performance of assets with different share prices to be compared directly.
+
+The AI portfolio assumes an equal initial investment in each selected company. The portfolio value is calculated as the arithmetic mean of the individual indexed stock prices. The portfolio is not periodically rebalanced, meaning company weights naturally change as their prices rise or fall.
+
+Both historical series are displayed against months elapsed since their respective starting dates, rather than calendar dates. This makes their trajectories easier to compare.
+
+#### Forecasting methodology
+
+The panel extends the AI portfolio with three illustrative 24-month scenarios: Bull, Base and Bear.
+
+The **Base scenario** assumes a cumulative return of +16.6% over 24 months.
+
+To construct the Bull and Bear scenarios, I used `pandas` to extract completed month-end portfolio observations and `NumPy` to calculate logarithmic returns. The sample standard deviation of these returns measures historical monthly volatility.
+
+The scenario spread is calculated as:
+
+`Spread = 1.645 × monthly volatility × √24`
+
+This spread is applied symmetrically in log-return space around the assumed Base outcome:
+
+- **Bull:** `1.166 × exp(Spread) − 1`
+- **Base:** `+16.6%`
+- **Bear:** `1.166 × exp(−Spread) − 1`
+
+All three forecast paths begin at the latest available AI portfolio value. NumPy is also used to generate smooth intermediate paths that reach the calculated scenario endpoints.
+
+These paths are illustrative, not statistically simulated forecasts. The Base return is an assumption, while the Bull and Bear outcomes depend on historical volatility and the chosen scenario spread.
+
+#### Python implementation and interactive features
+
+The panel combines several Python libraries:
+
+- **yfinance:** Retrieves historical NASDAQ and AI company prices.
+- **pandas:** Cleans and aligns datasets, constructs the portfolio, calculates returns and identifies monthly observations.
+- **NumPy:** Performs logarithmic-return, volatility and forecast-path calculations.
+- **Plotly:** Creates the interactive historical comparison, scenario lines, annotations and hover information.
+- **Dash:** Builds the expanded panel, performance cards and interactive integration with the main dashboard.
+
+The panel also uses Python's `functools.lru_cache` to avoid unnecessary repeated calculations and downloads for identical requests.
+
+The universal company selector allows users to change the composition of the AI portfolio. The panel then recalculates its performance and scenario outcomes.
+
+The expanded view also includes four key performance indicators: NASDAQ price return, NASDAQ maximum drawdown, AI portfolio return and AI maximum drawdown. A separate chart examines the historical NASDAQ peak-to-trough decline in greater detail.
+
+#### Limitations
+
+The historical comparison is descriptive and does not establish that the AI market will experience a crash similar to the dot-com bubble.
+
+The two periods differ in economic conditions, market composition and company characteristics. The AI portfolio is also sensitive to which companies are selected and the common starting date available for their prices.
+
+The forecasts depend on an assumed Base return and historical volatility. They should therefore be interpreted as hypothetical scenarios rather than reliable predictions or investment recommendations.
+
+#### Panel 3 Screenshots
+
+**Figure 3a — AI Boom vs. Dot-Com Bubble**
+
+![Panel 3 main comparison](screenshots/panel3_main.png)
+
+*The expanded Panel 3, showing the universal company selector, performance metrics and 24-month Bull, Base and Bear scenarios.*
+
+**Figure 3b — NASDAQ Dot-Com Crash Detail**
+
+![NASDAQ crash detail](screenshots/panel3_crash.png)
+
+*Historical NASDAQ performance from its March 2000 peak to October 2002 trough, showing a 77.9% decline.*
+
 
 ### Panel 4 — AI Valuation Simulator
 
