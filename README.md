@@ -83,26 +83,26 @@ Shows how AI-related companies have performed relative to the wider stock market
 
 ### Figure 1(a)
 [Panel 1 inside the dashboard with all 10 companies selected in the header, a 3-year period, and SPY and QQQ as benchmarks](docs/panel1-dashboard.png)
-![alt text](panel1_dashboard.png)
+![Panel 1 running through dashboard](panel1_dashboard.png)
 
 #### Controls
 
 | Control | Where | Options | Default |
 | --- | --- | --- | --- |
-| Companies | Dashboard: header buttons. (Panel_1 run on its own: "AI Companies" dropdown) | NVDA, MSFT, GOOGL, AMZN, META, AMD, TSM, ORCL, PLTR, ASML | All 10 |
+| Companies | Header buttons at top of dashboard | NVDA, MSFT, GOOGL, AMZN, META, AMD, TSM, ORCL, PLTR, ASML | All 10 |
 | Historical Period | Panel | 1, 3, 5 or 10 years | 3 Years |
 | Market Benchmarks | Panel | S&P 500 ETF (SPY), Nasdaq-100 ETF (QQQ); either, both or none | Both |
 | Chart Detail | Panel | Daily, Every 5 Days, Every 20 Days | Every 5 Days |
 | Refresh Yahoo data | Panel | Reloads the latest prices | n/a |
 
-In the dashboard, click a company button in the header to add or remove it. Select All and Deselect All change every company at once, and the counter (for example "10 / 10 selected") shows how many are on. Panel 1 shows the companies chosen there.
+In the dashboard, click a company button in the header to add or remove it. Select All and Deselect All change every selected company at once, and the counter (for example "10 / 10 selected") shows how many are on. Panel 1 shows the companies chosen there. Deselecting all will create a 'Please select at least one AI company' text.
 
 Chart Detail sets how many prices are plotted: Daily uses every trading day, Every 5 Days about one point a week, and Every 20 Days about one a month. Fewer points draw faster and look smoother. The latest price is always included, and total return is not affected.
 
 ### Figure 1(b)
 [Panel 1 running on its own, with the AI Companies dropdown](docs/panel1-standalone.png)
 
-![alt text]![alt text](image.png)
+![Panel 1 Running on its own](image.png)
 
 #### Reading the chart
 
@@ -114,7 +114,7 @@ Drag to rotate, scroll to zoom, and hover over a line for its value. Date runs a
 
 #### Good to know
 
-- Prices come from Yahoo Finance (via yfinance), need an internet connection, and are adjusted for stock splits and dividends. They are cached for 15 minutes. Use Refresh Yahoo data to reload.
+- Prices come from Yahoo Finance (via yfinance), need an internet connection, and are adjusted for stock splits and dividends. Use Refresh Yahoo data to reload.
 - If a company has less history than the period you chose, the chart starts at the first date all selected companies have data. The actual dates are shown under the chart.
 - A company or benchmark with no data is named under "Data unavailable for:" and left out of the chart.
 - The chart shows past performance only. It is not a forecast or investment advice.
