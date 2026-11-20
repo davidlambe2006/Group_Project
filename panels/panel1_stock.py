@@ -281,6 +281,11 @@ def p1_comparison_data(companies, period="3 Years", benchmarks=None):
 
     return indexed, missing
 # INTERACTIVE 3D STOCK PERFORMANCE CHART
+# Framing of the full-size 3D chart. SCENE_DOMAIN_Y is the part of the canvas
+# the 3D scene gets; a smaller gap between the two numbers zooms the drawing out.
+CHART_HEIGHT = 640
+CAMERA_ZOOM = 1.2
+CAMERA_CENTER_Z = -0.38
 
 
 
@@ -391,8 +396,8 @@ def p1_build_chart_3d(indexed_prices):
         template="plotly_dark",
         paper_bgcolor=DARK_BLUE,
         font=dict(color="white"),
-        height=620,
-        margin=dict(l=0, r=0, t=50, b=55),
+        height=CHART_HEIGHT,
+        margin=dict(l=0, r=0, t=40, b=0),
 
         scene=dict(
             xaxis=dict(
@@ -416,8 +421,13 @@ def p1_build_chart_3d(indexed_prices):
             ),
             bgcolor=DARK_BLUE,
             aspectratio=dict(x=2.2, y=1.0, z=1.2),
-            camera=dict(
-                eye=dict(x=1.5, y=-1.9, z=1.1)
+                        camera=dict(
+                eye=dict(
+                    x=1.5 * CAMERA_ZOOM,
+                    y=-1.9 * CAMERA_ZOOM,
+                    z=1.1 * CAMERA_ZOOM
+                ),
+                center=dict(x=0, y=0, z=CAMERA_CENTER_Z)
             )
         ),
 
@@ -442,7 +452,7 @@ def p1_build_chart_3d(indexed_prices):
             y=0.98
         ),
 
-        height=560
+        height=CHART_HEIGHT,
     )
 
     # Make the 3D axis labels white as well.
@@ -692,7 +702,7 @@ def p1_update_panel1(
             responsive=True,
             style={
                 "width": "100%",
-                "height": "560px"
+                "height": f"{CHART_HEIGHT}px"
             }
         ),
         style={
@@ -989,6 +999,6 @@ def p1_create_app(*, parse_selection, load_prices=p1_get_prices, **kwargs):
 # RUN DASH APPLICATION
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=True, dev_tools_ui=False)
 
 
