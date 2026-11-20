@@ -77,18 +77,47 @@ The top company selector controls **Panels 1–3**. **Panel 4 has its own compan
 
 ## 3. Panel guides
 
-### Panel 1 — AI Stock Performance
+### Panel 1 — AI Stock Performance (3D)
 
-Select companies in the header, then choose a **1, 3, 5, or 10-year** period. Add **SPY** (S&P 500 ETF) or **QQQ** (Nasdaq-100 ETF) as benchmarks. Chart detail options are **Daily**, **Every 5 Days**, and **Every 20 Days**.
+Shows how AI-related companies have performed relative to the wider stock market. Every company and two market benchmarks are drawn on one 3D chart, with each company's total return listed beside it.
 
-Drag the 3D chart to rotate it and hover over lines for values.
+### Figure 1(a)
+[Panel 1 inside the dashboard with all 10 companies selected in the header, a 3-year period, and SPY and QQQ as benchmarks](docs/panel1-dashboard.png)
+![alt text](panel1_dashboard.png)
 
-- **Indexed price:** starts at 100, allowing comparisons across different share prices. A value of 150 represents a 50% increase from the starting value.
-- **Total return:** percentage change over the analysed period.
-- **Annualised volatility:** variation in daily returns, expressed on an annual basis.
-- **Maximum drawdown:** the largest percentage fall from an earlier peak during the period.
+#### Controls
 
-**Screenshot:** [Show the controls, chart, and statistics. State the selected companies, period, and benchmarks.]
+| Control | Where | Options | Default |
+| --- | --- | --- | --- |
+| Companies | Dashboard: header buttons. (Panel_1 run on its own: "AI Companies" dropdown) | NVDA, MSFT, GOOGL, AMZN, META, AMD, TSM, ORCL, PLTR, ASML | All 10 |
+| Historical Period | Panel | 1, 3, 5 or 10 years | 3 Years |
+| Market Benchmarks | Panel | S&P 500 ETF (SPY), Nasdaq-100 ETF (QQQ); either, both or none | Both |
+| Chart Detail | Panel | Daily, Every 5 Days, Every 20 Days | Every 5 Days |
+| Refresh Yahoo data | Panel | Reloads the latest prices | n/a |
+
+In the dashboard, click a company button in the header to add or remove it. Select All and Deselect All change every company at once, and the counter (for example "10 / 10 selected") shows how many are on. Panel 1 shows the companies chosen there.
+
+Chart Detail sets how many prices are plotted: Daily uses every trading day, Every 5 Days about one point a week, and Every 20 Days about one a month. Fewer points draw faster and look smoother. The latest price is always included, and total return is not affected.
+
+### Figure 1(b)
+[Panel 1 running on its own, with the AI Companies dropdown](docs/panel1-standalone.png)
+
+![alt text]
+
+#### Reading the chart
+
+Drag to rotate, scroll to zoom, and hover over a line for its value. Date runs along one axis, company along another, and indexed price upwards. Line colours match the legend and the Total Return list.
+
+- **Indexed price:** every line starts at 100, so companies with different share prices can be compared. A value of 150 means a 50% rise from the start.
+- **Total return:** the percentage change from the first to the last date, shown for each company and benchmark.
+- **Against the market:** because all lines start at 100, a company that ends above the SPY or QQQ line beat that benchmark over the period.
+
+#### Good to know
+
+- Prices come from Yahoo Finance (via yfinance), need an internet connection, and are adjusted for stock splits and dividends. They are cached for 15 minutes. Use Refresh Yahoo data to reload.
+- If a company has less history than the period you chose, the chart starts at the first date all selected companies have data. The actual dates are shown under the chart.
+- A company or benchmark with no data is named under "Data unavailable for:" and left out of the chart.
+- The chart shows past performance only. It is not a forecast or investment advice.
 
 ### Panel 2 — Capital Investment vs Revenue
 
