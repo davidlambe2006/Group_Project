@@ -2,12 +2,12 @@
 
 An interactive Python dashboard exploring AI-related stock performance, corporate investment, historical market comparisons, and hypothetical future valuations. It runs on your computer and opens in your browser.
 
-| Panel | Question explored | Main output |
-|---|---|---|
-| 1 — AI Stock Performance | How have selected companies performed against market benchmarks? | 3D performance chart and risk statistics |
-| 2 — Capital Investment vs Revenue | How does company investment relate to revenue? | Bubble chart, regression, and financial table |
-| 3 — AI Boom vs Dot-Com Bubble | How does the AI portfolio compare with the dot-com period? | Historical comparison and illustrative scenarios |
-| 4 — AI Valuation Simulator | What future price follows from selected financial assumptions? | Price estimates, scenario comparison, and sensitivity heatmap |
+| Panel | Name | Question explored | Main output |
+|---|---|---|---|
+| 1 — AI Stock Performance | Fionn Noonan | How have selected companies performed against market benchmarks? | 3D performance chart and risk statistics |
+| 2 — Capital Investment vs Revenue | Michael Keane | How does company investment relate to revenue? | Bubble chart, regression, and financial table |
+| 3 — AI Boom vs Dot-Com Bubble | David Lambe | How does the AI portfolio compare with the dot-com period? | Historical comparison and illustrative scenarios |
+| 4 — AI Valuation Simulator | Conan Fennell | What future price follows from selected financial assumptions? | Price estimates, scenario comparison, and sensitivity heatmap |
 
 **Dashboard overview:** [Insert a screenshot showing the four panels and company selector. Record the capture date.]
 
@@ -121,17 +121,251 @@ Drag to rotate, scroll to zoom, and hover over a line for its value. Date runs a
 
 ### Panel 2 — Capital Investment vs Revenue
 
-Select companies, hover over bubbles for details, and switch to the table to inspect the underlying figures.
+#### Purpose and Overview
 
-- **X-axis:** capital expenditure—spending on long-term assets, in USD billions.
-- **Y-axis:** annual revenue—sales before expenses, in USD billions.
-- **Bubble size:** market capitalisation—the market value of the company's equity.
-- **Regression line:** the fitted linear relationship between spending and revenue.
-- **R²:** the proportion of variation in revenue explained by that fit within the selected sample.
+Panel 2 investigates the relationship between capital expenditure (CapEx), annual revenue and market capitalisation across ten major AI-related companies.
 
-The relationship does not establish that spending caused the revenue. Company reporting periods and business models may differ.
+The panel combines an interactive bubble chart, linear regression analysis, a zoomed-in comparison of smaller companies and a financial data table. All financial metrics are retrieved from Yahoo Finance and standardised into US dollars to enable comparisons.
 
-**Screenshots:** [Show the bubble chart with readable axes and regression information, followed by the financial table.]
+#### Understanding the Bubble Chart
+
+Each bubble represents one company, with three financial variables determining its position and size.
+
+| Variable | Chart Representation | Explanation |
+|---|---|---|
+| Capital Expenditure | X-axis ($B) | Annual spending on long-term assets and infrastructure. |
+| Annual Revenue | Y-axis ($B) | Total revenue generated during the selected financial year. |
+| Market Capitalisation | Bubble size ($T) | Current market value of the company's equity. |
+| Industry Sector | Bubble colour | Groups companies according to their assigned sector. |
+
+**Sector classifications:**
+
+- **Semiconductors (Cyan):** NVDA, AMD, TSM, ASML.
+- **Software & Cloud (Red):** MSFT, GOOGL, AMZN, ORCL, PLTR.
+- **Internet Services (Green):** META.
+
+#### How to Use Panel 2
+
+1. **Select companies:** Use the universal company selector at the top of the dashboard to include or exclude companies.
+2. **Open Panel 2:** Select the chart from the dashboard overview to access its expanded view.
+3. **Explore the graph:** Hover over bubbles to inspect financial values and compare companies.
+4. **Examine the inset:** Use the zoomed-in chart to compare NVDA, AMD, ASML and PLTR where valid data is available.
+5. **Toggle regression:** Use the **On/Off** buttons to show or hide the regression line and R² statistic.
+6. **Switch to Table:** Select the **Table** tab to inspect the underlying company data, with sortable columns.
+
+---
+
+#### Data Collection and Financial Statement Selection
+
+Financial information is retrieved using Python's `yfinance` library. For each company, the program creates a `yf.Ticker()` object and accesses three main data sources:
+
+| Data Source | Python Attribute | Information Retrieved |
+|---|---|---|
+| Company Information | `company.info` | Company name, market capitalisation and reporting currencies. |
+| Income Statement | `company.income_stmt` | Annual total revenue. |
+| Cash Flow Statement | `company.cashflow` | Annual capital expenditure. |
+
+**Selecting the financial year**
+
+The program identifies the financial reporting dates that appear in **both** the income statement and cash flow statement using:
+
+```python id="cayb3s"
+common_years = income.columns.intersection(cashflow.columns)
+```
+
+These dates are sorted from newest to oldest. The program selects the **most recent common financial year with valid revenue and CapEx values**.
+
+This ensures both variables relate to the same company's reporting period rather than combining figures from different financial years.
+
+The exact statement entries used are:
+
+- **Revenue:** `Total Revenue` from the annual income statement.
+- **Capital expenditure:** `Capital Expenditure` from the annual cash flow statement.
+
+CapEx is converted to a positive value using `abs()`, since capital investment is commonly represented as a negative cash outflow in financial statements.
+
+> **Financial reporting distinction:** Revenue and CapEx are annual flow variables, whereas market capitalisation is a current market valuation. They therefore require different approaches to currency conversion.
+
+---
+
+#### Currency Conversion and Standardisation
+
+The selected companies report financial information in different currencies. To ensure meaningful comparisons, the dashboard converts all values into US dollars (USD).
+
+The code distinguishes between two currency fields from Yahoo Finance:
+
+- `financialCurrency`: The currency used in the company's financial statements.
+- `currency`: The currency associated with its market quotation and market capitalisation.
+
+These currencies are not necessarily identical.
+
+##### 1. Revenue and CapEx — Historical Average Exchange Rate
+
+For companies with non-USD financial statements, the program retrieves historical exchange rates covering approximately one year before the selected financial year-end.
+
+The relevant Yahoo Finance FX ticker is constructed as:
+
+```python id="dwll09"
+fx_ticker = f"{currency}USD=X"
+```
+
+The program calculates the arithmetic mean of the available daily closing exchange rates over the selected reporting window:
+
+```python id="0dnd20"
+fx_rate = fx_data['Close'].dropna().mean()
+```
+
+Revenue and CapEx are then converted using:
+
+```python id="rjhmn6"
+revenue = rev * fx_rate / 1e9
+capex = abs(expenditure) * fx_rate / 1e9
+```
+
+Dividing by `1e9` expresses both financial metrics in **USD billions ($B)**.
+
+##### 2. Market Capitalisation — Latest Available Exchange Rate
+
+Unlike annual revenue and CapEx, market capitalisation represents a valuation at a particular point in time.
+
+The program retrieves the market capitalisation from:
+
+```python id="4110ea"
+cap = info.get('marketCap')
+```
+
+Where the market quotation currency is not USD, the program downloads the most recent five days of exchange-rate data and selects the **latest available closing rate**.
+
+```python id="lecmju"
+fx_rate_market = fx_data['Close'].dropna().iloc[-1]
+cap = cap * fx_rate_market
+```
+
+The converted market capitalisation is divided by `1e12` to display it in **USD trillions ($T)**.
+
+##### Currency Conversion Summary
+
+| Financial Metric | Exchange Rate Used | Reason |
+|---|---|---|
+| Annual Revenue | Historical average over reporting year | Revenue accumulates throughout the year. |
+| Capital Expenditure | Historical average over reporting year | Investment expenditure occurs throughout the year. |
+| Market Capitalisation | Latest available closing rate | Market capitalisation is a current point-in-time valuation. |
+
+Companies reporting in USD do not require currency conversion.
+
+If a required exchange rate is missing or invalid, the company's values are excluded from the calculations rather than using an unreliable conversion.
+
+---
+
+#### Data Cleaning and Validation
+
+Before plotting, the program validates the financial data using `pandas` and `NumPy`.
+
+The main cleaning operations are:
+
+1. Convert financial columns into numeric values.
+2. Replace infinite values with missing values (`NaN`).
+3. Remove observations missing revenue, CapEx or market capitalisation.
+4. Exclude observations containing zero or negative values for these metrics.
+5. Retain the remaining valid companies for the graph, table and regression.
+
+A failed request for one company does not automatically prevent the remaining companies from loading.
+
+Instead, the unavailable company is omitted and the dashboard continues using valid observations.
+
+---
+
+#### Linear Regression and R² Analysis
+
+Panel 2 uses simple linear regression to examine the relationship between capital expenditure and annual revenue.
+
+The model is:
+
+`Revenue = Intercept + Slope × Capital Expenditure`
+
+Where:
+
+- **Dependent variable (Y):** Annual Revenue ($B).
+- **Independent variable (X):** Capital Expenditure ($B).
+- **Intercept:** Estimated revenue when CapEx equals zero.
+- **Slope:** Estimated change in revenue associated with an additional $1 billion of CapEx.
+
+The regression coefficients are calculated using NumPy:
+
+```python id="6i3dzr"
+slope, intercept = np.polyfit(x, y, 1)
+```
+
+The fitted values are calculated as:
+
+```python id="ahaxfb"
+predicted = intercept + slope * x
+```
+
+##### Coefficient of Determination (R²)
+
+R² measures the proportion of variation in annual revenue explained by the fitted linear relationship with CapEx.
+
+For example, an R² of `0.75` indicates that **75% of the observed variation in revenue is explained by the fitted linear model** within the selected company sample.
+
+##### Regression Requirements
+
+The regression is only calculated when:
+
+- At least **three companies** have valid data.
+- Capital expenditure contains at least two distinct values.
+- Annual revenue contains at least two distinct values.
+
+If these conditions are not met, the panel displays **Regression unavailable** instead of producing a misleading result.
+
+Users can also toggle the regression line and its statistics on or off.
+
+> **Interpretation:** Regression identifies an association, not causation. Higher CapEx does not necessarily cause higher revenue, and differences in company size, business models and reporting periods can influence the relationship.
+
+---
+
+#### Zoomed-In Company Comparison (Inset Chart)
+
+Companies with lower revenue and CapEx cluster near the origin, so a zoomed-in inset allows for clearer comparison of **NVIDIA (NVDA), AMD, ASML and Palantir (PLTR)**.
+
+The inset uses the **same underlying financial observations** as the main chart, but applies its own axis ranges to make smaller values easier to distinguish.
+
+---
+
+#### Financial Data Table
+
+The **Table** tab displays the underlying company data used in the chart and regression, including company name, ticker, sector, CapEx ($B), revenue ($B) and market capitalisation ($T).
+
+Values are displayed to two decimal places, and users can sort the table by column.
+
+---
+
+#### Limitations
+
+- **Reporting periods:** Revenue and CapEx are drawn from each company's latest matching financial year, which may differ across companies.
+- **Currency conversion:** Historical average FX rates approximate the conversion of annual financial flows.
+- **External data:** Results depend on the availability and accuracy of Yahoo Finance information.
+- **Regression:** The analysis uses a small, selected sample of companies and identifies correlation rather than causation.
+
+Panel 2 provides a comparative financial analysis rather than a forecast of future revenue or stock market performance.
+
+---
+
+#### Panel 2 Screenshots
+
+**Figure 2(a) — Capital Investment vs Revenue**
+
+![Panel 2 bubble chart](screenshots/panel2_main.png)
+
+*Main bubble chart showing capital expenditure, annual revenue, market capitalisation, sector classifications, regression analysis and the zoomed-in company comparison.*
+
+**Figure 2(b) — Financial Data Table**
+
+![Panel 2 financial data table](screenshots/panel2_table.png)
+
+*Company-level financial data used in the chart, displayed in USD billions and trillions.*
+
+---
 
 ### Panel 3 — AI Boom vs. Dot-Com Bubble
 
@@ -307,7 +541,18 @@ Group_Project/
 
 ## 6. References and attribution
 
-- [Yahoo Finance](https://finance.yahoo.com/) — financial data.
-- [yfinance](https://github.com/ranaroussi/yfinance) — data retrieval.
-- [Python](https://docs.python.org/3/), [Dash](https://dash.plotly.com/), [Plotly](https://plotly.com/python/), [pandas](https://pandas.pydata.org/docs/), [NumPy](https://numpy.org/doc/), and [Flask](https://flask.palletsprojects.com/) — application libraries and documentation.
-- **External code, resources, and assistance:** [identify sources, their use, and any required declarations under module rules].
+The dashboard uses the following data sources, libraries and documentation:
+
+| Resource | Reference |
+|---|---|
+| Python | [Python Documentation](https://docs.python.org/3/) |
+| Dash | [Dash Documentation](https://dash.plotly.com/) |
+| Plotly | [Plotly Python Documentation](https://plotly.com/python/) |
+| Yahoo Finance | [Yahoo Finance](https://finance.yahoo.com/) |
+| yfinance | [yfinance GitHub Repository](https://github.com/ranaroussi/yfinance) |
+| pandas | [pandas Documentation](https://pandas.pydata.org/docs/) |
+| NumPy | [NumPy Documentation](https://numpy.org/doc/) |
+| Flask | [Flask Documentation](https://flask.palletsprojects.com/) |
+| Matplotlib | [Matplotlib Documentation](https://matplotlib.org/) |
+
+---].
