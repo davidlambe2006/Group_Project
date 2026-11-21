@@ -83,7 +83,7 @@ Shows how AI-related companies have performed relative to the wider stock market
 
 ### Figure 1(a)
 [Panel 1 inside the dashboard with all 10 companies selected in the header, a 3-year period, and SPY and QQQ as benchmarks](docs/panel1-dashboard.png)
-![Panel 1 running through dashboard](panel1_dashboard.png)
+![Panel 1 running through dashboard](screenshots/panel1_dashboard.png)
 
 #### Controls
 
@@ -100,9 +100,9 @@ In the dashboard, click a company button in the header to add or remove it. Sele
 Chart Detail sets how many prices are plotted: Daily uses every trading day, Every 5 Days about one point a week, and Every 20 Days about one a month. Fewer points draw faster and look smoother. The latest price is always included, and total return is not affected.
 
 ### Figure 1(b)
-[Panel 1 running on its own, with the AI Companies dropdown](docs/panel1-standalone.png)
+[Panel 1 running on its own, with the AI Companies dropdown](image/panel1-standalone.png)
 
-![Panel 1 Running on its own](image.png)
+![Panel 1 Running on its own](screenshots/image.png)
 
 #### Reading the chart
 
