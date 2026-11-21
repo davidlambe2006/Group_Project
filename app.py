@@ -647,5 +647,7 @@ if __name__ == "__main__":
     parser.add_argument("--port", type=int, default=8050)
     arguments = parser.parse_args()
     print(f"Open http://127.0.0.1:{arguments.port} in your browser.")
+    import logging
+    logging.getLogger("werkzeug").setLevel(logging.ERROR)
     app.run(host="127.0.0.1", port=arguments.port, debug=False)
 
