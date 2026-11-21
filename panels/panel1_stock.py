@@ -974,7 +974,7 @@ def p1_create_app(*, parse_selection, load_prices=p1_get_prices, **kwargs):
                         dcc.Graph(
                             figure=p1_build_chart_3d(sampled),
                             config={"responsive": True, "displaylogo": False},
-                            style={"minWidth": 0},
+                            style={"minWidth": 0,"height": f"{CHART_HEIGHT}px"},
                         ),
                         html.Div(cards),
                     ],
