@@ -1,16 +1,9 @@
-﻿"""Panel 4: self-contained Dash valuation simulator.
-
-Install: python -m pip install dash plotly yfinance
-Run:     python panels/panel4_simulator.py
-Open:    http://127.0.0.1:8056
-
-Embed in the team's Dash app (no server starts when imported):
-    from panels.panel4_simulator import p4_create_layout, p4_register_callbacks
-    app.layout = html.Div([other_panels, p4_create_layout()])
-    p4_register_callbacks(app)
-
-All data loading, calculations, layout and callbacks are in this file.
-"""
+﻿# Panel 4: AI Valuation Simulator
+# Estimates future share prices using revenue growth, net profit margin
+# and a future price-to-earnings (P/E) ratio.
+# Compares Bear, Base and Bull scenarios, with a heatmap showing
+# how different growth and margin assumptions affect annual returns.
+# Runs independently or as part of the four-panel dashboard.
 
 from datetime import datetime, timezone
 from math import isfinite
@@ -29,7 +22,8 @@ try:
 except ImportError:  # Direct execution of the standalone simulator.
     from dashboard_shared import BORDER, NAVY as SHARED_NAVY
 
-
+# Colours, preset assumptions and available companies.
+# Scenario growth and margin are percentages: 20 means 20%.
 NAVY = "#081423"
 CYAN = "#20e3e8"
 WHITE = "#f3f5fa"
@@ -53,6 +47,7 @@ _cache = {}
 
 
 def p4_positive_number(value, label):
+    """Convert a value to a positive, finite float or raise a labelled error."""
     try:
         value = float(value)
     except (TypeError, ValueError) as error:
@@ -61,7 +56,7 @@ def p4_positive_number(value, label):
         raise ValueError(f"{label.capitalize()} must be a positive, finite number.")
     return value
 
-
+# Load and validate company data before using it in the simulator.
 def p4_load_company_data(company, force=False):
     """Return real, dated inputs. Never substitute fictional numbers on failure."""
     if company not in COMPANIES:
@@ -131,7 +126,8 @@ def p4_percent_to_decimal(percent):
         raise ValueError("Enter a finite percentage.")
     return percent / 100
 
-
+# Valuation calculations.
+# Growth and margin use decimals here: 20% must be supplied as 0.20.
 def p4_calculate_valuation(revenue, shares, current_price, growth, margin, pe, years):
     """Project a future price with constant shares and no dividends."""
     values = (revenue, shares, current_price, growth, margin, pe, years)
@@ -149,9 +145,11 @@ def p4_calculate_valuation(revenue, shares, current_price, growth, margin, pe, y
     if pe <= 0 or years <= 0 or years != int(years):
         raise ValueError("P/E must be positive; years must be a positive whole number.")
     try:
+        # Project revenue, convert it into earnings, then calculate price per share and annual return.
         future_revenue = revenue * (1 + growth) ** years
         future_net_income = future_revenue * margin
         future_eps = future_net_income / shares
+         # Calculate the compound annual return over the full investment period.
         future_price = future_eps * pe
         annual_return = (future_price / current_price) ** (1 / years) - 1
     except OverflowError as error:
@@ -170,7 +168,7 @@ def p4_value_for(data, assumptions):
         p4_percent_to_decimal(assumptions["growth"]),
         p4_percent_to_decimal(assumptions["margin"]), assumptions["pe"], assumptions["years"],
     )
-
+# Sensitivity analysis: vary growth and margin while keeping P/E and years fixed.
 def p4_heatmap_data(data, assumptions):
     """Recalculate the selected scenario across growth and margin assumptions."""
     growth = sorted(set([0, 10, 20, 30, 40, 50, assumptions["growth"]]))
@@ -179,6 +177,8 @@ def p4_heatmap_data(data, assumptions):
                 for g in growth] for m in margins]
     return growth, margins, results
 
+# Public entry points delegate to the integrated implementation below.
+# Those functions are defined before these wrappers are called.
 def p4_scenario_options(selected="Base"):
     return p4_integrated_scenario_options(selected)
 
@@ -200,6 +200,8 @@ def p4_make_heatmap(data, assumptions):
                               x=.5, y=.5, xref="paper", yref="paper")
         return figure
     growth, margins, results = p4_heatmap_data(data, assumptions)
+       # Each row represents a margin; each column represents a growth rate.
+       # Display returns as percentages and retain prices for the hover details.
     returns = [[result["annual_return"] * 100 for result in row] for row in results]
     prices = [[result["price"] for result in row] for row in results]
     limit = max(15, max(abs(value) for row in returns for value in row))
@@ -263,7 +265,7 @@ def p4_render_results(data, scenario):
 def p4_register_callbacks(app):
     return p4_integrated_register_callbacks(app)
 
-
+# Assemble the standalone Dash app using the layout and callbacks.
 def p4_create_app():
     """Build the standalone app without fetching data or starting a server on import."""
     app = Dash(__name__, title="Panel 4 - AI Valuation Simulator")
@@ -289,7 +291,8 @@ def p4_open_when_ready(url, timeout=30):
           "Check the terminal for an error, then run the file again.")
 
 
-# Integrated dashboard
+# Shared dashboard styling and implementation.
+# The public wrapper functions above also use this implementation in standalone mode.
 
 
 p4_NAVY = SHARED_NAVY
@@ -356,7 +359,7 @@ def p4_integrated_scenario_options(selected="Base"):
         for name, values in SCENARIOS.items()
     ]
 
-
+# Build the page layout: company controls on the left, results on the right.
 def p4_integrated_create_layout():
     """Return Panel 4's layout for a standalone or shared Dash app."""
 
@@ -381,7 +384,7 @@ def p4_integrated_create_layout():
         )
 
     return html.Div(
-        [
+        [   # Store company figures in this browser tab for the callbacks to use.
             dcc.Store(id="panel4-data", storage_type="memory"),
             html.H2("04 | AI Valuation Simulator", style={"color": CYAN}),
             html.Div(
@@ -557,7 +560,8 @@ def p4_integrated_make_heatmap(data, assumptions):
         figure.update_annotations(text="Load Yahoo data or enter manual inputs")
     return figure
 
-
+# Update company figures from Yahoo or manual inputs.
+# If an update fails, keep previous figures only for the same company.
 def p4_integrated_update_company_data(company, trigger, price, revenue, shares, previous):
     """Keep each browser's selected/manual inputs in its own dcc.Store."""
     saved = previous if previous and previous.get("company") == company else None
@@ -628,6 +632,7 @@ def p4_integrated_render_results(data, scenario):
             )
         )
     rows = []
+        # Calculate each preset using the same company data for a fair comparison.
     for name, values in SCENARIOS.items():
         outcome = p4_value_for(data, values)
         cells = [
@@ -682,6 +687,8 @@ def p4_integrated_render_results(data, scenario):
 
 def p4_integrated_register_callbacks(app):
     """Call once on the shared app after adding create_layout() to its layout."""
+        # Callbacks connect user actions to updates on the page.
+        # Inputs trigger updates; State supplies values without triggering them.
     @app.callback(
         Output("panel4-scenario", "options"),
         Input("panel4-scenario", "value"),
@@ -726,7 +733,8 @@ def p4_integrated_register_callbacks(app):
             )
         return metrics, figure, table, source, description
 
-
+# Run the simulator only when this file is executed directly.
+# Importing it into the main dashboard does not start another server.
 if __name__ == "__main__":
     app = p4_create_app()
     print("Starting Panel 4. Your browser will open when Dash is ready. "
