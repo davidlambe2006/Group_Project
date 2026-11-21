@@ -456,51 +456,146 @@ The forecasts depend on an assumed Base return and historical volatility. They s
 *Historical NASDAQ performance from its March 2000 peak to October 2002 trough, showing a 77.9% decline.*
 
 
+
 ### Panel 4 — AI Valuation Simulator
 
-Estimate a hypothetical future share price from assumptions about growth, profitability, and valuation.
+#### Purpose and Overview
 
-#### How to use it
+Panel 4 examines how revenue growth, profitability and valuation assumptions affect a company's potential future share price.
 
-1. Choose a company using this panel's selector.
-2. Review the financial data and source dates.
-3. Select **Bear**, **Base**, or **Bull**.
-4. Compare the estimated future price and annualised return.
-5. Hover over the heatmap to explore growth and profit-margin combinations.
-6. Expand **Compare scenarios** to view the comparison table.
+Using financial data from Yahoo Finance, the simulator calculates an estimated future share price and annualised return under three scenarios: **Bear, Base and Bull**.
 
-| Scenario | Annual revenue growth | Net profit margin | Future P/E | Years |
-|---|---:|---:|---:|---:|
-| Bear | 10% | 20% | 30× | 5 |
-| Base | 20% | 25% | 30× | 5 |
-| Bull | 30% | 30% | 30× | 5 |
+An interactive sensitivity heatmap illustrates how different growth and profit-margin assumptions influence these results.
 
-These presets are illustrative assumptions, not company-specific forecasts.
+#### How to Use Panel 4
+1. **Select a company:** Choose one of the ten AI-related companies using Panel 4's independent company selector.
+2. **Choose a scenario:** Select Bear, Base or Bull to apply different financial assumptions.The Base scenario remains highlighted with a bold outline for reference, while Bear or Bull are highlighted using a dotted outline if chosen. The Compare Scenarios drop-down explains all 3 scenarios side by side.
+3. **Review the valuation:** Examine the current share price, estimated future price and annualised return.
+4. **Explore the heatmap:** Hover over cells to see how revenue growth and profit margins affect projected returns.
+5. **Refresh data:** Select **Refresh Yahoo data** to retrieve updated financial information.
 
-#### Financial basis
 
-The simulator uses an **earnings-multiple model**: grow revenue, estimate profit, calculate earnings per share (EPS), then apply a future price-to-earnings ratio (P/E).
+Unlike Panels 1–3, Panel 4 operates independently of the dashboard's universal company selector.
 
-```text
-Future revenue = current annual revenue × (1 + growth)^years
-Future EPS = future revenue × net profit margin ÷ equivalent shares
-Future price = future EPS × future P/E
-Annualised return = (future price ÷ current price)^(1 ÷ years) − 1
-```
+**Figure 4(a) — Bear, Base and Bull Scenario Selection**
 
-Growth and margin are decimals in these formulas: 20% is `0.20`.
+![Panel 4 scenario selector](screenshots/panel4_scenarios.png)
 
-A **25% net profit margin** means $0.25 profit per $1 of revenue. A **30× P/E** means a price equal to 30 times annual earnings per share.
+*The scenario selector allows users to switch between Bear, Base and Bull assumptions.*
 
-**Example:** $50 billion revenue growing at 20% annually for five years becomes approximately $124.4 billion. At a 25% margin, 5 billion equivalent shares, and a 30× P/E, the estimated future price is **$186.62**.
+#### Financial Data and Inputs
 
-Annualised return expresses the constant yearly price growth needed to reach the estimate. The heatmap repeats the valuation across growth and margin combinations, keeping the selected scenario's P/E and horizon.
+The simulator retrieves three company-specific inputs using Python's `yfinance` library.
 
-**Limits:** this estimates a future price under assumptions; it does not discount future cash flows to estimate today's intrinsic value. Growth, margin, shares, P/E, and FX are held constant. Dividends, fees, and taxes are excluded.
+| Input | Purpose |
+|---|---|
+| Annual revenue | Starting point for projecting future earnings |
+| Equivalent shares outstanding | Converts projected earnings into earnings per share |
+| Current share price | Determines the potential investment return |
 
-For American Depositary Share (ADS) listings, the price and equivalent share count must use consistent listing units. **Refresh Yahoo data** restores retrieved figures.
+The program uses the latest available annual revenue, checks the consistency of share-price and share-count data, and converts reported revenue into USD where necessary.
 
-**Screenshots:** [Show company, scenario, assumptions, results, and heatmap. Add the expanded manual-input controls with units visible.]
+#### How the Valuation Is Calculated
+
+The simulator uses an **earnings-multiple valuation model**, following four calculations:
+
+**1. Project future revenue**
+
+Future Revenue = Current Revenue × (1 + Growth Rate)^Years
+
+**2. Calculate future earnings per share (EPS)**
+
+Future EPS = Future Revenue × Net Profit Margin ÷ Shares Outstanding
+
+**3. Estimate future share price**
+
+Future Share Price = Future EPS × Future P/E Ratio
+
+**4. Calculate annualised return**
+
+Annualised Return = (Future Price ÷ Current Price)^(1 / Years) − 1
+
+**Worked Example**
+
+Assume a company has $50 billion in annual revenue, 5 billion shares outstanding, a current share price of $100, 20% annual revenue growth, a 25% net profit margin and a future P/E ratio of 30 over five years.
+
+| Calculation | Result |
+|---|---:|
+| Future revenue: $50bn × 1.20⁵ | $124.42bn |
+| Future net income: $124.42bn × 25% | $31.10bn |
+| Future EPS: $31.10bn ÷ 5bn shares | $6.22 |
+| Future share price: $6.22 × 30 | **$186.62** |
+| Annualised return: ($186.62 ÷ $100)^(1/5) − 1 | **13.3%** |
+
+Under these assumptions, the company's estimated share price rises from **$100 to $186.62**, equivalent to an annualised return of approximately **13.3%**.
+
+A 25% net margin means the company earns $0.25 in profit per $1 of revenue. A P/E of 30 values each $1 of annual earnings per share at $30.
+
+#### Why Results Differ Between Companies
+
+Although companies use the same scenario assumptions, each starts with different financial data.
+
+- **Revenue:** Determines the starting scale of projected earnings.
+- **Shares outstanding:** Determines the earnings attributable to each share.
+- **Current share price:** Determines whether the projected future price represents a gain or loss.
+
+For example, two companies could generate identical future earnings per share but different annualised returns because their current share prices differ.
+
+Therefore, **higher projected earnings do not necessarily mean higher investment returns**. The price investors pay today also matters.
+
+#### Scenario Analysis
+
+The simulator applies three predefined sets of assumptions over a five-year period.
+
+| Scenario | Annual Revenue Growth | Net Profit Margin | Future P/E |
+|---|---:|---:|---:|
+| Bear | 10% | 20% | 30× |
+| Base | 20% | 25% | 30× |
+| Bull | 30% | 30% | 30× |
+
+The same assumptions are applied to each company's starting financial data, enabling consistent comparisons.
+
+The **Compare scenarios** feature displays the estimated future share price and annualised return for all three scenarios.
+
+#### Understanding the Sensitivity Heatmap
+
+The interactive heatmap calculates estimated annualised returns across different combinations of revenue growth and net profit margin.
+
+| Element | Meaning |
+|---|---|
+| X-axis | Annual revenue growth (%) |
+| Y-axis | Net profit margin (%) |
+| Cell value | Estimated annualised return (%) |
+| Turquoise | Positive return |
+| White | Approximately zero return |
+| Orange | Negative return |
+| Solid outline | Base scenario |
+| Dashed outline | Selected scenario, when different from Base |
+
+Each cell repeats the valuation calculation using a different growth rate and profit margin, while holding the future P/E ratio and investment horizon constant.
+
+**Moving right** increases assumed revenue growth, while **moving up** increases assumed profitability. Both increase the estimated return, all else equal.
+
+Hovering over a cell displays the relevant assumptions, estimated future share price and annualised return.
+
+**Figure 4(b) — Individual Panel 4 View**
+
+![Panel 4 expanded simulator](screenshots/panel4_full.png)
+
+*Expanded Panel 4 showing the selected company's valuation results and the interactive annual-return sensitivity heatmap.*
+
+#### Model Assumptions and Limitations
+
+- **Constant assumptions:** Revenue growth, net margin, share count and future P/E are held constant throughout the projection.
+- **Data dependency:** Results depend on the accuracy and availability of Yahoo Finance data.
+- **Excluded factors:** Dividends, share dilution, taxes and trading costs are excluded.
+- **Valuation method:** The model uses projected earnings and a future P/E multiple rather than discounted cash flow analysis.
+- **Forecast uncertainty:** Bear, Base and Bull represent illustrative scenarios, not guaranteed outcomes.
+
+**Panel 4 is designed to explore valuation sensitivity and potential investment outcomes, not to predict future stock prices or provide investment advice.**
+
+---
+
 
 ## 4. Data and implementation
 
