@@ -16,6 +16,8 @@ from urllib.request import urlopen
 from dash import Dash, Input, Output, State, ctx, dcc, html
 import plotly.graph_objects as go
 import yfinance as yf
+import sys
+sys.dont_write_bytecode = True
 
 try:
     from .dashboard_shared import BORDER, NAVY as SHARED_NAVY
@@ -736,6 +738,8 @@ def p4_integrated_register_callbacks(app):
 # Run the simulator only when this file is executed directly.
 # Importing it into the main dashboard does not start another server.
 if __name__ == "__main__":
+    import logging
+    logging.getLogger("werkzeug").setLevel(logging.ERROR)
     app = p4_create_app()
     print("Starting Panel 4. Your browser will open when Dash is ready. "
           "Keep this terminal running.")
