@@ -355,13 +355,13 @@ Panel 2 provides a comparative financial analysis rather than a forecast of futu
 
 **Figure 2(a) — Capital Investment vs Revenue**
 
-![Panel 2 bubble chart](screenshots/panel2_main.png)
+![Panel 2 Graph](screenshots/panel2_graph_dashboard.png)
 
 *Main bubble chart showing capital expenditure, annual revenue, market capitalisation, sector classifications, regression analysis and the zoomed-in company comparison.*
 
 **Figure 2(b) — Financial Data Table**
 
-![Panel 2 financial data table](screenshots/panel2_table.png)
+![Panel 2 Table](screenshots/panel2_table_dashboard.png)
 
 *Company-level financial data used in the chart, displayed in USD billions and trillions.*
 
