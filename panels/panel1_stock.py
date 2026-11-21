@@ -1002,6 +1002,6 @@ def p1_create_app(*, parse_selection, load_prices=p1_get_prices, **kwargs):
 if __name__ == "__main__":
     import logging
     logging.getLogger("werkzeug").setLevel(logging.ERROR)
-    app.run(debug=True, dev_tools_ui=False)
+    app.run(debug=False, dev_tools_ui=False)
 
 
