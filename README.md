@@ -9,7 +9,10 @@ An interactive Python dashboard exploring AI-related stock performance, corporat
 | 3 — AI Boom vs Dot-Com Bubble | David Lambe | How does the AI portfolio compare with the dot-com period? | Historical comparison and illustrative scenarios |
 | 4 — AI Valuation Simulator | Conan Fennell | What future price follows from selected financial assumptions? | Price estimates, scenario comparison, and sensitivity heatmap |
 
-**Dashboard overview:** [Insert a screenshot showing the four panels and company selector. Record the capture date.]
+
+**Dashboard overview:** 
+
+![AI Boom Dashboard Overview](screenshots/final_dashboard.png)
 
 ## 1. Opening the dashboard
 
