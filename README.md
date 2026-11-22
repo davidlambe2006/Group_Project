@@ -4,7 +4,7 @@ An interactive Python dashboard exploring AI-related stock performance, corporat
 
 | Panel | Name | Question explored | Main output |
 |---|---|---|---|
-| 1 — AI Stock Performance | Fionn Noonan | How have selected companies performed against market benchmarks? | 3D performance chart and risk statistics |
+| 1 — AI Stock Performance | Fionn Ó Nuanáin  | How have selected companies performed against market benchmarks? | 3D performance chart and risk statistics |
 | 2 — Capital Investment vs Revenue | Michael Keane | How does company investment relate to revenue? | Bubble chart, regression, and financial table |
 | 3 — AI Boom vs Dot-Com Bubble | David Lambe | How does the AI portfolio compare with the dot-com period? | Historical comparison and illustrative scenarios |
 | 4 — AI Valuation Simulator | Conan Fennell | What future price follows from selected financial assumptions? | Price estimates, scenario comparison, and sensitivity heatmap |
@@ -97,10 +97,13 @@ Shows how AI-related companies have performed relative to the wider stock market
 | Market Benchmarks | Panel | S&P 500 ETF (SPY), Nasdaq-100 ETF (QQQ); either, both or none | Both |
 | Chart Detail | Panel | Daily, Every 5 Days, Every 20 Days | Every 5 Days |
 | Refresh Yahoo data | Panel | Reloads the latest prices | n/a |
+| Price Scale | Panel | Linear or Log | Linear |
 
 In the dashboard, click a company button in the header to add or remove it. Select All and Deselect All change every selected company at once, and the counter (for example "10 / 10 selected") shows how many are on. Panel 1 shows the companies chosen there. Deselecting all will create a 'Please select at least one AI company' text.
 
 Chart Detail sets how many prices are plotted: Daily uses every trading day, Every 5 Days about one point a week, and Every 20 Days about one a month. Fewer points draw faster and look smoother. The latest price is always included, and total return is not affected.
+
+Price Scale sets how the vertical axis is drawn. Linear spaces the values evenly, so a company that has grown far more than the others, such as NVIDIA over a longer period, can dominate the chart and flatten the rest. Log spaces the values by percentage change, so equal steps up the axis mean equal percentage gains, and every company stays easy to read. Switching the scale only changes how the chart looks. The prices and the total return shown in the cards stay the same.
 
 ### Figure 1(b)
 [Panel 1 running on its own, with the AI Companies dropdown](image/panel1-standalone.png)
