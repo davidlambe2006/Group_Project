@@ -650,4 +650,4 @@ The dashboard uses the following data sources, libraries and documentation:
 | Flask | [Flask Documentation](https://flask.palletsprojects.com/) |
 | Matplotlib | [Matplotlib Documentation](https://matplotlib.org/) |
 
----].
+---

@@ -255,6 +255,7 @@ def p2_style_valuation_chart(fig):
         ),
         xaxis=dict(
             title_text='<b>Capital Expenditure ($B)</b>',
+            title_font=dict(family="Arial", size=16, color="white"),
             showline=True,
             linecolor='white',
             linewidth=2,
@@ -264,6 +265,7 @@ def p2_style_valuation_chart(fig):
         ),
         yaxis=dict(
             title_text='<b>Annual Revenue ($B)</b>',
+            title_font=dict(family="Arial", size=16, color="white"),
             tickformat='.0f',
             showline=True,
             linecolor='white',

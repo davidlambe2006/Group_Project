@@ -164,6 +164,23 @@ def global_status(chosen):
 def compact_figure(figure, panel):
     """Fit each original chart to a responsive overview quadrant."""
     figure = go.Figure(figure)
+    # Consistent axis-title formatting across all overview panels
+    axis_title_font = dict(
+        family="Arial",
+        size=13,
+        color="white"
+    )
+
+    if panel == 1:
+        figure.update_scenes(
+            xaxis_title_font=axis_title_font,
+            yaxis_title_font=axis_title_font,
+            zaxis_title_font=axis_title_font
+        )
+    else:
+        figure.update_xaxes(title_font=axis_title_font)
+        figure.update_yaxes(title_font=axis_title_font)
+
     if panel == 4:
         # Retain Panel 4's original preview styling and independent data.
         figure.update_layout(autosize=True, height=None, width=None, title=None,
@@ -181,9 +198,11 @@ def compact_figure(figure, panel):
             center=dict(x=0, y=0, z=-0.3))),
             legend=dict(orientation="h", x=0.5, xanchor="center", y=1.0,
                         yanchor="bottom", font=dict(size=13, color="white"), bgcolor=SHARED_NAVY))
-        figure.update_scenes(xaxis_title_font_size=12, yaxis_title_font_size=12, zaxis_title_font_size=12,
-                             xaxis_tickfont_size=11, zaxis_tickfont_size=11,
-                             yaxis_showticklabels=False)
+        figure.update_scenes(
+            xaxis_tickfont_size=11,
+            zaxis_tickfont_size=11,
+            yaxis_showticklabels=False
+        )
     elif panel == 2:
         # Remove expanded-panel annotations and custom legend boxes
         figure.layout.annotations = []
@@ -199,13 +218,12 @@ def compact_figure(figure, panel):
             else:
                 trace.showlegend = False
         figure.update_layout(showlegend=False)
-        figure.update_xaxes(domain=[0, 1], autorange=True, title_font_size=11, automargin=True)
+        figure.update_xaxes(domain=[0, 1], autorange=True, automargin=True)
         figure.update_yaxes(
              autorange=True,
              tickmode="linear",
              tick0=0,
              dtick=250,
-             title_font_size=11,
              tickfont_size=11,
              automargin=True
         )
@@ -215,8 +233,10 @@ def compact_figure(figure, panel):
             trace.name = label
         figure.update_layout(margin=dict(l=55, r=110, t=42, b=46),
             legend=dict(orientation="h", x=0, y=1.04, yanchor="bottom", font=dict(size=9)))
-        figure.update_xaxes(title_font_size=11, tickfont_size=10)
-        figure.update_yaxes(title_font_size=11, tickfont_size=10)
+        figure.update_xaxes(tickfont_size=10)
+        figure.update_yaxes(tickfont_size=10)
+        figure.update_xaxes(title_text="<b>Months Since Start</b>")
+        figure.update_yaxes(title_text="<b>Indexed Performance · Base 100</b>")
     return figure
 
 

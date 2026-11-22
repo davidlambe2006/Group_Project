@@ -458,10 +458,17 @@ def p1_build_chart_3d(indexed_prices):
 
     # Make the 3D axis labels white as well.
     fig.update_scenes(
+        xaxis_title_text="<b>Date</b>",
+        yaxis_title_text="<b>Company</b>",
+        zaxis_title_text="<b>Indexed Price (Base = 100)</b>",
+        xaxis_title_font=dict(family="Arial", size=16, color="white"),
+        yaxis_title_font=dict(family="Arial", size=16, color="white"),
+        zaxis_title_font=dict(family="Arial", size=16, color="white"),
         xaxis_color="white",
         yaxis_color="white",
         zaxis_color="white"
     )
+    
     return fig
 
 

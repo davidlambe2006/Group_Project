@@ -226,7 +226,7 @@ def p4_make_heatmap(data, assumptions):
         tickcolor=WHITE,
         ticklen=6,
         tickfont=dict(size=14, color=WHITE),
-        title_font=dict(size=16, color=WHITE),
+        title_font=dict(family="Arial", size=16, color=WHITE),
         title_standoff=14,
         automargin=True,
         showgrid=False,

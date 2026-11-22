@@ -403,8 +403,8 @@ def p3_render_panel3(selected_companies=None):
             size=13
         ),
 
-        xaxis_title="Months Since Start",
-        yaxis_title="Indexed Performance · Base 100",
+        xaxis_title="<b>Months Since Start<b>",
+        yaxis_title="<b>Indexed Performance · Base 100<b>",
 
         hovermode="closest",
 
@@ -446,6 +446,7 @@ def p3_render_panel3(selected_companies=None):
 
     fig.update_xaxes(
         # Add label space beyond every observed/forecast point; retain the y scale.
+        title_font=dict(family="Arial", size=16, color="white"),
         range=[0, max(float(nasdaq_x[-1]), float(forecast_x[-1])) + 16],
         showgrid=True,
         gridcolor="rgba(148,163,184,0.07)",
@@ -457,6 +458,7 @@ def p3_render_panel3(selected_companies=None):
     )
 
     fig.update_yaxes(
+        title_font=dict(family="Arial", size=16, color="white"),
         showgrid=True,
         gridcolor="rgba(148,163,184,0.07)",
         automargin=True,
@@ -542,7 +544,8 @@ def p3_nasdaq_crash_detail():
         tickformat="%b %Y", nticks=6, showgrid=False, zeroline=False
     )
     detail.update_yaxes(
-        title="NASDAQ index · Base 100", automargin=True,
+        title="<b>NASDAQ index · Base 100<b>", automargin=True,
+        title_font=dict(family="Arial", size=16, color="white"),
         range=[float(crash.min()) - padding, float(crash.max()) + padding],
         gridcolor="rgba(148,163,184,0.07)", zeroline=False
     )
