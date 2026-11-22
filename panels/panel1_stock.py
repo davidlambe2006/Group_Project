@@ -7,7 +7,7 @@ import numpy as np
 import yfinance as yf
 
 #Libraries for the dashboard and interactive
-from dash import Dash, dcc, html, Input, Output
+from dash import Dash, dcc, html, Input, Output, ctx
 import plotly.graph_objects as go
 #Python tools for handling dates
 from datetime import date, timedelta
@@ -242,45 +242,6 @@ def p1_calculate_statistics(indexed_prices):
     return statistics
 
 
-
-# One download-and-normalise path, shared by the full panel and the overview
-
-def p1_comparison_data(companies, period="3 Years", benchmarks=None):
-    """
-    Download, clean and index prices for the companies plus any benchmarks.
-
-    Returns
-    -------
-    tuple
-        (indexed_prices, missing_tickers). Raises ValueError when there is
-        not enough data to compare.
-    """
-
-    tickers = list(dict.fromkeys(list(companies) + list(benchmarks or [])))
-
-    start = date.today() - timedelta(
-        days=round(int(period.split()[0]) * 365.25)
-    )
-    end = date.today() + timedelta(days=1)
-
-    prices = p1_get_prices(tickers, start.isoformat(), end.isoformat())
-
-    # Identify tickers with no usable prices.
-    missing = [
-        ticker for ticker in tickers
-        if ticker not in prices or prices[ticker].isna().all()
-    ]
-    prices = prices.drop(columns=missing, errors="ignore")
-
-    if not any(ticker in prices for ticker in companies):
-        raise ValueError("No selected AI companies have available data.")
-
-    indexed = p1_index_and_normalise(prices)
-
-    if len(indexed) < 3:
-        raise ValueError("Not enough shared historical data to compare.")
-
-    return indexed, missing
 # INTERACTIVE 3D STOCK PERFORMANCE CHART
 # Framing of the full-size 3D chart. SCENE_DOMAIN_Y is the part of the canvas
 # the 3D scene gets; a smaller gap between the two numbers zooms the drawing out.
@@ -290,7 +251,7 @@ CAMERA_CENTER_Z = -0.38
 
 
 
-def p1_build_chart_3d(indexed_prices):
+def p1_build_chart_3d(indexed_prices,log_scale=False):
     """
     Create an interactive 3D chart of indexed stock performance.
 
@@ -334,6 +295,7 @@ def p1_build_chart_3d(indexed_prices):
                 z=z_values,
                 mode="lines",
                 name=ticker,
+                legendgroup=ticker,
                 line=dict(color=colour, width=6),
                 text=dates.strftime("%d %b %Y"),
                 hovertemplate=(
@@ -379,6 +341,7 @@ def p1_build_chart_3d(indexed_prices):
                 k=k,
                 color=colour,
                 opacity=0.18,
+                legendgroup=ticker,
                 hoverinfo="skip",
                 showlegend=False
             )
@@ -416,6 +379,7 @@ def p1_build_chart_3d(indexed_prices):
                 backgroundcolor=DARK_BLUE
             ),
             zaxis=dict(
+                type="log" if log_scale else "linear",
                 title="Indexed Price (Base = 100)",
                 gridcolor=GRID,
                 backgroundcolor=DARK_BLUE
@@ -471,26 +435,6 @@ def p1_build_chart_3d(indexed_prices):
     
     return fig
 
-
-# FIGURE FOR THE DASHBOARD OVERVIEW
-
-def p1_render(companies):
-    """
-    Build the Panel 1 chart for the overview grid.
-
-    Uses the companies chosen in the dashboard header, both benchmarks,
-    three years of history and every fifth trading day.
-    """
-
-    indexed, _missing = p1_comparison_data(companies, "3 Years", list(BENCHMARKS))
-
-    sampled = indexed.iloc[::5]
-
-    # Include the latest observation
-    if sampled.index[-1] != indexed.index[-1]:
-        sampled = pd.concat([sampled, indexed.iloc[[-1]]])
-
-    return p1_build_chart_3d(sampled)
 
 # DASH DASHBOARD AND INTERACTIVE CONTROLS
 
@@ -598,228 +542,6 @@ app = Dash(__name__, title="AI Boom Dashboard")
 
 app.layout = p1_create_panel1_layout()
 
-
-# DASH CALLBACK
-
-@app.callback(
-    Output("panel1_results", "children"),
-    Input("panel1_companies", "value"),
-    Input("panel1_period", "value"),
-    Input("panel1_benchmarks", "value"),
-    Input("panel1_detail", "value")
-)
-def p1_update_panel1(
-    selected_companies,
-    period,
-    selected_benchmarks,
-    detail
-):
-
-    # Check selected companies
-    if not selected_companies:
-        return html.P("Please select at least one AI company.")
-
-    selected_benchmarks = selected_benchmarks or []
-
-    # Combine companies and benchmarks
-    tickers = list(dict.fromkeys(
-        selected_companies + selected_benchmarks
-    ))
-
-    # Calculate historical period
-    years = int(period.split()[0])
-
-    end_date = date.today() + timedelta(days=1)
-
-    start_date = date.today() - timedelta(
-        days=round(years * 365.25)
-    )
-
-    # Download stock prices
-    try:
-        prices = p1_get_prices(
-            tickers,
-            start_date.isoformat(),
-            end_date.isoformat()
-        )
-
-    except Exception as error:
-        return html.P(
-            f"Unable to download stock data: {error}"
-        )
-
-    if prices.empty:
-        return html.P("No stock data was returned.")
-
-    # Identify missing prices
-    missing = [
-        ticker for ticker in tickers
-        if ticker not in prices.columns
-        or prices[ticker].isna().all()
-    ]
-
-    prices = prices.drop(
-        columns=missing,
-        errors="ignore"
-    )
-
-    if not any(
-        ticker in prices.columns
-        for ticker in selected_companies
-    ):
-        return html.P(
-            "No selected AI companies have available data."
-        )
-
-    # Normalise prices
-    indexed_prices = p1_index_and_normalise(prices)
-
-    if len(indexed_prices) < 3:
-        return html.P(
-            "Not enough shared historical data to compare."
-        )
-
-    # Calculate performance statistics
-    statistics = p1_calculate_statistics(indexed_prices)
-
-    # Select chart detail
-    if detail == "Daily":
-        step = 1
-    elif detail == "Every 5 Days":
-        step = 5
-    else:
-        step = 20
-
-    chart_prices = indexed_prices.iloc[::step].copy()
-
-    # Include the latest observation
-    if chart_prices.index[-1] != indexed_prices.index[-1]:
-        chart_prices = pd.concat([
-            chart_prices,
-            indexed_prices.iloc[[-1]]
-        ])
-
-    # LEFT COLUMN: 3D stock performance graph
-
-    figure = p1_build_chart_3d(chart_prices)
-
-    chart_col = html.Div(
-        dcc.Graph(
-            id="panel1_3d_chart",
-            figure=figure,
-            responsive=True,
-            style={
-                "width": "100%",
-                "height": f"{CHART_HEIGHT}px"
-            }
-        ),
-        style={
-            "flex": "3",
-            "minWidth": "0"
-        }
-    )
-
-    # RIGHT COLUMN: Performance statistics
-
-    cards = []
-
-    for number, ticker in enumerate(indexed_prices.columns):
-
-        colour = p1_ticker_colour(ticker, number)
-
-        total_return = statistics.loc[
-            ticker, "Total Return (%)"
-        ]
-
-        company_name = COMPANIES.get(
-            ticker, BENCHMARKS.get(ticker, ticker)
-        )
-
-        # Create performance card
-        card = html.Div([
-
-            html.Span(
-                f"{company_name} ({ticker})",
-                style={
-                    "color": "white",
-                    "fontSize": "13px"
-                }
-            ),
-
-            html.Span(
-                f"{total_return:+,.1f}%",
-                style={
-                    "color": colour,
-                    "fontWeight": "bold",
-                    "fontSize": "15px"
-                }
-            )
-
-        ], style={
-            "backgroundColor": "#131F31",
-            "borderLeft": f"4px solid {colour}",
-            "borderRadius": "7px",
-            "padding": "12px",
-            "marginBottom": "8px",
-            "display": "flex",
-            "justifyContent": "space-between",
-            "alignItems": "center",
-            "gap": "10px"
-        })
-
-        cards.append(card)
-
-    stats_col = html.Div([
-
-        html.H4("Total Return"),
-
-        *cards
-
-    ], style={
-        "flex": "1",
-        "minWidth": "250px"
-    })
-
-    # Combine chart and statistics columns
-
-    result = html.Div(
-        [chart_col, stats_col],
-        style={
-            "display": "flex",
-            "flexWrap": "wrap",
-            "gap": "24px"
-        }
-    )
-
-    # Data source information
-    caption = html.P(
-        f"Source: Yahoo Finance via yfinance | "
-        f"Actual comparison period: "
-        f"{indexed_prices.index[0]:%d %b %Y} to "
-        f"{indexed_prices.index[-1]:%d %b %Y} | "
-        "Prices adjusted for stock splits and dividends.",
-        style={
-            "color": "#A8B9CF",
-            "fontSize": "12px",
-            "marginTop": "20px"
-        }
-    )
-
-    output = []
-
-    if missing:
-        output.append(
-            html.P(
-                "Data unavailable for: " + ", ".join(missing),
-                style={"color": "#FBC56C"}
-            )
-        )
-
-    output.extend([result, caption])
-
-    return html.Div(output)
-
-
 # Integrated dashboard
 
 
@@ -835,15 +557,46 @@ def p1_comparison_data(companies, period="3 Years", benchmarks=None, *, load_pri
     prices = prices.drop(columns=missing, errors="ignore")
     if not any(ticker in prices for ticker in companies):
         raise ValueError("No selected AI companies have available data.")
+        # Remember which ticker's listing date sets the start of the shared window.
+    first_seen = prices.apply(pd.Series.first_valid_index)
     indexed = p1_index_and_normalise(prices)
     if len(indexed) < 3:
         raise ValueError("Not enough shared historical data to compare.")
+    if first_seen.max() - prices.index[0] > pd.Timedelta(days=14):
+            indexed.attrs["limited_by"] = first_seen.idxmax()
     return indexed, missing
 
+def p1_stat_text(stats, ticker, reference="SPY"):
+    """One-line risk summary for a performance card."""
+    text = (
+        f"Volatility {stats.loc[ticker, 'Annualised Volatility (%)']:.1f}% · "
+        f"Max drawdown {stats.loc[ticker, 'Maximum Drawdown (%)']:.1f}%"
+    )
+    if reference in stats.index and ticker != reference:
+        gap = stats.loc[ticker, "Total Return (%)"] - stats.loc[reference, "Total Return (%)"]
+        text += f" · vs {reference} {gap:+,.0f} pp"
+    return text
+
+def p1_cached_loader(load_prices):
+    """Wrap a price loader so control changes reuse the same download."""
+    cache = {}
+
+    def load(tickers, start, end):
+        key = (tuple(tickers), start, end)
+        if key not in cache:
+            prices = load_prices(tickers, start, end)
+            if prices.empty:          # never cache a failed download
+                return prices
+            cache[key] = prices
+        return cache[key].copy()
+
+    load.clear = cache.clear
+    return load
 
 def p1_create_app(*, parse_selection, load_prices=p1_get_prices, **kwargs):
     app = Dash(__name__, **kwargs, include_assets_files=False)
     dropdown_style = DROPDOWN_STYLE
+    load_prices = p1_cached_loader(load_prices)
 
     def control(label, element):
         return html.Label([html.Div(label, style={"marginBottom": "8px"}), element])
@@ -866,6 +619,8 @@ def p1_create_app(*, parse_selection, load_prices=p1_get_prices, **kwargs):
                             value="3 Years",
                             clearable=False,
                             style=dropdown_style,
+                            persistence=True,
+                            persistence_type="session"
                         ),
                     ),
                     control(
@@ -876,6 +631,8 @@ def p1_create_app(*, parse_selection, load_prices=p1_get_prices, **kwargs):
                             value=["SPY", "QQQ"],
                             multi=True,
                             style=dropdown_style,
+                            persistence=True,
+                            persistence_type="session"
                         ),
                     ),
                     control(
@@ -886,13 +643,27 @@ def p1_create_app(*, parse_selection, load_prices=p1_get_prices, **kwargs):
                             value="Every 5 Days",
                             clearable=False,
                             style=dropdown_style,
-                        ),
+                            persistence=True,
+                            persistence_type="session"
+                         ),
                     ),
+                    control(
+                    "Price Scale",
+                    dcc.Dropdown(
+                        id="p1-scale",
+                        options=["Linear", "Log"],
+                        value="Linear",
+                        clearable=False,
+                        style=dropdown_style,
+                        persistence=True,
+                        persistence_type="session"
+                    ),
+                ),
                 ],
                 className="p1-controls",
                 style={
                     "display": "grid",
-                    "gridTemplateColumns": "repeat(3,minmax(0,1fr))",
+                    "gridTemplateColumns": "repeat(4,minmax(0,1fr))",
                     "gap": "20px",
                     "marginTop": "18px",
                 },
@@ -930,9 +701,12 @@ def p1_create_app(*, parse_selection, load_prices=p1_get_prices, **kwargs):
         Input("p1-period", "value"),
         Input("p1-benchmarks", "value"),
         Input("p1-detail", "value"),
+        Input("p1-scale", "value"),
         Input("p1-refresh", "n_clicks"),
     )
-    def update(companies, period, benchmarks, detail, _refresh):
+    def update(companies, period, benchmarks, detail, scale, _refresh):
+        if ctx.triggered_id == "p1-refresh":
+            load_prices.clear()  # Refresh button forces a new Yahoo download
         if not companies:
             return html.P("Please select at least one AI company.", role="status")
         try:
@@ -942,15 +716,21 @@ def p1_create_app(*, parse_selection, load_prices=p1_get_prices, **kwargs):
             sampled = indexed.iloc[::step]
             if sampled.index[-1] != indexed.index[-1]:
                 sampled = pd.concat([sampled, indexed.iloc[[-1]]])
-            cards = [html.H4("Total Return")]
+            cards = [html.H4("Performance")]
             for i, ticker in enumerate(indexed.columns):
                 colour = p1_ticker_colour(ticker, i)
                 cards.append(
                     html.Div(
                         [
-                            html.Span(
-                                f"{COMPANIES.get(ticker, BENCHMARKS.get(ticker, ticker))} ({ticker})"
-                            ),
+                             html.Div(
+                                [
+                                 html.Span(f"{COMPANIES.get(ticker, BENCHMARKS.get(ticker, ticker))} ({ticker})"),
+                                    html.Small(
+                                        p1_stat_text(stats, ticker),
+                                        style={"display": "block", "color": TEXT_MUTED, "marginTop": "4px"},
+                                    ),
+                                ]
+                            ),  
                             html.Strong(
                                 f"{stats.loc[ticker, 'Total Return (%)']:+,.1f}%",
                                 style={"color": colour, "whiteSpace": "nowrap"},
@@ -971,15 +751,23 @@ def p1_create_app(*, parse_selection, load_prices=p1_get_prices, **kwargs):
                 )
             return [
                 None,
-                (
+                    (
                     html.P("Data unavailable for: " + ", ".join(missing))
                     if missing
+                    else None
+                ),
+                (
+                    html.P(
+                        f"{indexed.attrs['limited_by']} listed later than the other tickers, "
+                        f"so every line starts on {indexed.index[0]:%d %b %Y}."
+                    )
+                    if indexed.attrs.get("limited_by")
                     else None
                 ),
                 html.Div(
                     [
                         dcc.Graph(
-                            figure=p1_build_chart_3d(sampled),
+                            figure=p1_build_chart_3d(sampled, log_scale=(scale == "Log")),
                             config={"responsive": True, "displaylogo": False},
                             style={"minWidth": 0,"height": f"{CHART_HEIGHT}px"},
                         ),
@@ -1009,6 +797,9 @@ def p1_create_app(*, parse_selection, load_prices=p1_get_prices, **kwargs):
 if __name__ == "__main__":
     import logging
     logging.getLogger("werkzeug").setLevel(logging.ERROR)
-    app.run(debug=False, dev_tools_ui=False)
+    # Standalone demo: no header, so use the default company list.
+    p1_create_app(
+        parse_selection=lambda search: None, title="AI Boom Dashboard"
+    ).run(debug=False, dev_tools_ui=False)
 
 
