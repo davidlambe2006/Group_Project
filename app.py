@@ -1,15 +1,10 @@
-"""AI Boom dashboard controller.
+"""AI Boom Dashboard - Main Application Controller.
 
-Install: python -m pip install dash==4.5.0 plotly==7.1.0 yfinance==1.8.0 pandas==3.1.1 numpy==2.5.4 Flask==3.1.3
-Run: python app.py
-Open: http://127.0.0.1:8050
+This file brings together the four dashboard panels, manages navigation
+and the shared company selector, and connects user inputs to the relevant
+analysis and visualisation functions.
 
-The controller mounts the panels, handles navigation and the universal company
-selector, and reuses analysis and chart functions from the panel modules.
-Appearance uses Dash's native Python style dictionaries. Real market data is
-fetched from Yahoo Finance at runtime and cached in memory for 15 minutes.
-Internet is required for market data; the simulator also accepts manual inputs.
-
+Financial data is retrieved from Yahoo Finance.
 """
 
 import sys
@@ -58,13 +53,10 @@ GLOBAL_PANELS = (1, 2, 3)
 
 
 # Universal company selection
-
-
 def global_normalise_selection(values):
     """Valid tickers only, without duplicates, in the canonical 10-company order."""
     chosen = {str(value).strip().upper() for value in (values or [])}
     return [ticker for ticker in GLOBAL_COMPANIES if ticker in chosen]
-
 
 def global_parse_selection(search):
     """Read '?companies=NVDA,MSFT,...' from a URL query string; None if absent."""
@@ -72,7 +64,6 @@ def global_parse_selection(search):
     if "companies" not in query:
         return None
     return global_normalise_selection(",".join(query["companies"]).split(","))
-
 
 def global_panel_url(panel, selection):
     """Address of a full-size panel carrying the header selection."""
@@ -118,7 +109,6 @@ def cached_market_data(function):
 
     return wrapped
 
-
 stock_get_prices = cached_market_data(stock_get_prices)
 p2_load_valuation_data = cached_market_data(p2_load_valuation_data)
 TITLES = [
@@ -150,17 +140,13 @@ def global_chip_style(selected):
     }
     return style
 
-
 def global_status(chosen):
     """Show the number selected from all twelve companies."""
     return html.Span(
         f"{len(chosen)} / {len(GLOBAL_COMPANIES)} selected", style={"color": CYAN}
     )
 
-
 # Overview graph integration
-
-
 def compact_figure(figure, panel):
     """Fit each original chart to a responsive overview quadrant."""
     figure = go.Figure(figure)
@@ -239,7 +225,6 @@ def compact_figure(figure, panel):
         figure.update_yaxes(title_text="<b>Indexed Performance · Base 100</b>")
     return figure
 
-
 def message_figure(message):
     figure = go.Figure()
     figure.update_layout(
@@ -256,7 +241,6 @@ def message_figure(message):
         ],
     )
     return figure
-
 
 def overview_figure(panel, companies=None):
     """Reuse the original panel calculations and figures with their real data.
@@ -290,10 +274,7 @@ def overview_figure(panel, companies=None):
         figure = p4_make_heatmap(data, p4_SCENARIOS["Base"])
     return compact_figure(figure, panel)
 
-
 # Main dashboard layout and shared callbacks
-
-
 def create_app():
     server = Flask(__name__)
     panel_apps = []
@@ -657,9 +638,7 @@ def create_app():
     app.panel_apps = panel_apps
     return app
 
-
 # Application startup
-
 app = create_app()
 server = app.server
 if __name__ == "__main__":

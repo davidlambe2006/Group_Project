@@ -36,6 +36,7 @@ sector_map = {
     "ASML": "Semiconductors"
 }
 
+# Financial columns that must contain valid numbers for the anlaysis
 NUMERIC_COLS = ['Market Cap ($T)', 'Capital Expenditure ($B)', 'Annual Revenue ($B)']
 
 def p2_load_valuation_data(selected_tickers):
@@ -43,19 +44,23 @@ def p2_load_valuation_data(selected_tickers):
 
     A failed ticker is recorded with missing values so other tickers still load.
     """
+    # Store each companies financial data and track failed downlaods separately
     rows = []
     failed_tickers = []
 
+    # Retrieving financial information for each selected company
     for ticker in selected_tickers:
         name, cap, capex, revenue = ticker, None, None, None
         try:
             company = yf.Ticker(ticker)
             info = company.info
             name = info.get('displayName') or info.get('shortName') or ticker
+            # Retrieving market capitalisation, revenue and cash flow data
             cap = info.get('marketCap')
             income = company.income_stmt
             cashflow = company.cashflow
 
+            # Only continue if both financial statements contain data
             if not income.empty and not cashflow.empty:
                 if 'Total Revenue' in income.index and 'Capital Expenditure' in cashflow.index:
                     # Use the latest year with valid figures to ensure a fair comparison.
@@ -63,8 +68,9 @@ def p2_load_valuation_data(selected_tickers):
                     for year in sorted(common_years, reverse=True):
                         rev = income.loc['Total Revenue', year]
                         expenditure = cashflow.loc['Capital Expenditure', year]
+                        # Only use a year with both Revenue and Capital Expenditure figures are available
                         if pd.notna(rev) and pd.notna(expenditure):
-                             # Get currencies for financial statements and market cap
+                             # Identify currencies for financial statements and market capitalisation
                             currency = info.get('financialCurrency')
                             market_currency = info.get('currency')
                             
@@ -79,7 +85,9 @@ def p2_load_valuation_data(selected_tickers):
                             # rather than values measured at one point in time.
                             fx_rate = 1.0
                             if currency != 'USD':
+                                 # Construct the Yahoo Finance Ticker for conversion into USD
                                  fx_ticker = f"{currency}USD=X"
+                                 # Download exchange rates over precednig annual reporting years
                                  fx_data = yf.Ticker(fx_ticker).history(
                                       start=year - pd.DateOffset(years=1),
                                       end=year + pd.Timedelta(days=1)
@@ -87,14 +95,15 @@ def p2_load_valuation_data(selected_tickers):
                                  
                                  if fx_data.empty or fx_data['Close'].dropna().empty:
                                      raise ValueError(f"No exchange rate available for {currency}")
-                                 
+
+                                 # Average available daily closing rates to estimate the annual conversion rate
                                  fx_rate = fx_data['Close'].dropna().mean()
 
                                  if not np.isfinite(fx_rate) or fx_rate <= 0:
                                      raise ValueError(f"Invalid exchange rate for {currency}")
                                  
-                            revenue = rev * fx_rate / 1e9
-                            capex = abs(expenditure) * fx_rate / 1e9
+                            revenue = rev * fx_rate / 1e9 # Convert revenue to USD billions
+                            capex = abs(expenditure) * fx_rate / 1e9 # Express Capital Expenditure as positive in USD billions
                             
                             # Market capitalisation is a current valuation, unlike annual revenue
                             # and CapEx. Convert it using the latest available FX closing price.
@@ -104,11 +113,13 @@ def p2_load_valuation_data(selected_tickers):
                                 
                                 if fx_data.empty or fx_data['Close'].dropna().empty:
                                     raise ValueError(f"No market cap exchange rate for {market_currency}")
-                                
+
+                                # Select the latest avialable closing exchange rate
                                 fx_rate_market = fx_data['Close'].dropna().iloc[-1]
                                 if not np.isfinite(fx_rate_market) or fx_rate_market <= 0:
                                     raise ValueError(f"Invalid market cap exchange rate for {market_currency}")
-
+                                
+                                # Converting market capitalisation to USD
                                 cap = cap * fx_rate_market
                                 
                             break
@@ -140,10 +151,12 @@ def p2_prepare_chart_data(df):
     """
 
     cleaned = df.copy()
+    # Convert finanical columns to numbers, replacing invalid entries with NaN
     cleaned[NUMERIC_COLS] = cleaned[NUMERIC_COLS].apply(
         pd.to_numeric, errors='coerce'
     ).replace([np.inf, -np.inf], np.nan)
 
+    # Keep only positive values to ensure meaningful comaprison
     chart_df = cleaned.dropna(subset=NUMERIC_COLS)
     chart_df = chart_df[
         (chart_df['Capital Expenditure ($B)'] > 0) &
@@ -166,14 +179,17 @@ def p2_calculate_regression(chart_df):
     x = chart_df['Capital Expenditure ($B)']
     y = chart_df['Annual Revenue ($B)']
 
-    # Require at least 3 companies and varfiation in both variables.
+    # Require at least 3 companies and variation in both variables.
     if len(x) < 3 or x.nunique() < 2 or y.nunique() < 2:
         return None, None, None, x
 
     slope, intercept = np.polyfit(x, y, 1)
+    # Calculate predicted revenue from regression
     predicted = intercept + slope * x
+    # Measure total revenue variation around its mean
     ss_total = np.sum((y - y.mean()) ** 2)
     ss_residual = np.sum((y - predicted) ** 2)
+    # Calculate R-squared to assess how closely line fits the data
     r_squared = 1 - ss_residual / ss_total
     return slope, intercept, r_squared, x
 
