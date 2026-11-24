@@ -10,7 +10,7 @@ import yfinance as yf
 import plotly.express as px
 import pandas as pd
 import numpy as np
-from dash import Dash, dcc, html, dash_table, Input, Output
+from dash import Dash, dcc, html, dash_table, Input, Output, State, ctx
 import plotly.graph_objects as go
 import sys
 sys.dont_write_bytecode = True
@@ -219,6 +219,13 @@ def p2_create_bubble_scatter(chart_df, size_max):
         },
         title='The AI Bubble: Capital Investment vs Revenue'
     )
+    # Maintain consistent bubble sizes regardless of company selection
+    fig.update_traces(
+        marker=dict(
+            sizemode="area",
+            sizeref=5 / size_max**2
+        )
+    )
 
     # Improve readability of bubbles and their labels
     fig.update_traces(
@@ -418,7 +425,7 @@ def p2_add_market_cap_legend(fig, chart_df, size_max):
     )
 
     # Calculate bubble sizes using Plotly's scaling method
-    max_cap = chart_df['Market Cap ($T)'].max()
+    max_cap = 5.0
 
     for cap, y in [
         (0.5, 0.61),
@@ -653,7 +660,7 @@ def p2_add_small_company_inset(fig, chart_df):
     )
 
     # Scale bubble AREA by market capitalisation
-    max_cap = small[cap_col].max()
+    max_cap = 5.0
     sizeref = 2 * max_cap / (46 ** 2)
 
     label_offsets = {
@@ -768,12 +775,26 @@ def p2_build_valuation_chart(chart_df, regression, show_inset=False):
 
     return fig
 
+# Styling for the standalone company selection buttons
+def p2_company_button_style(selected):
+    return {
+        "padding": "5px 12px",
+        "fontSize": "11px",
+        "fontWeight": "600",
+        "letterSpacing": "0.5px",
+        "borderRadius": "12px",
+        "border": "1px solid #5ce0d3" if selected else "1px solid #263449",
+        "backgroundColor": "#143137" if selected else "#0f1b2d",
+        "color": "#5ce0d3" if selected else "#9fb2c8",
+        "cursor": "pointer"
+    }
+
 def p2_standalone_selection(search):
     """Use all companies when Panel 2 runs outside the main dashboard."""
     return None
 
 # Integrated dashboard
-def p2_create_app(selected_tickers=tickers, *, parse_selection, load_valuations=p2_load_valuation_data, **kwargs):
+def p2_create_app(selected_tickers=tickers, *, parse_selection, load_valuations=p2_load_valuation_data, standalone=False, **kwargs):
     app = Dash(__name__, **kwargs, include_assets_files=False)
     tab_style = {
         "backgroundColor": CARD,
@@ -791,6 +812,66 @@ def p2_create_app(selected_tickers=tickers, *, parse_selection, load_valuations=
     app.layout = html.Div(
         [
             dcc.Location(id="p2-url", refresh=False),
+                        dcc.Store(id="p2-company-selection", data=list(TICKERS)),
+
+            # Company selector for standalone mode only
+            html.Div(
+                [
+                    html.Span(
+                        "COMPANIES",
+                        style={
+                            "fontSize": "10px",
+                            "color": "#9fb2c8",
+                            "letterSpacing": "1.5px"
+                        }
+                    ),
+
+                    *[
+                        html.Button(
+                            ticker,
+                            id=f"p2-chip-{ticker}",
+                            n_clicks=0,
+                            style=p2_company_button_style(True)
+                        )
+                        for ticker in TICKERS
+                    ],
+
+                    html.Button(
+                        "Select All",
+                        id="p2-select-all",
+                        n_clicks=0,
+                        style=p2_company_button_style(False)
+                    ),
+
+                    html.Button(
+                        "Deselect All",
+                        id="p2-deselect-all",
+                        n_clicks=0,
+                        style=p2_company_button_style(False)
+                    ),
+
+                    html.Span(
+                        f"{len(TICKERS)} / {len(TICKERS)} selected",
+                        id="p2-selection-status",
+                        style={
+                            "color": "#5ce0d3",
+                            "fontSize": "11px"
+                        }
+                    )
+                ],
+                style={
+                    "display": "flex" if standalone else "none",
+                    "justifyContent": "center",
+                    "alignItems": "center",
+                    "flexWrap": "wrap",
+                    "gap": "6px",
+                    "padding": "12px",
+                    "backgroundColor": "#131F31",
+                    "borderBottom": "1px solid #263449",
+                    "marginBottom": "10px"
+                }
+            ),
+
             html.Button("Refresh Yahoo data", id="valuation-refresh", n_clicks=0),
             dcc.Tabs(
                 id="view-toggle",
@@ -823,6 +904,44 @@ def p2_create_app(selected_tickers=tickers, *, parse_selection, load_valuations=
         },
     )
 
+        # Update the standalone company selection
+    @app.callback(
+        Output("p2-company-selection", "data"),
+        *[Output(f"p2-chip-{ticker}", "style") for ticker in TICKERS],
+        Output("p2-selection-status", "children"),
+        *[Input(f"p2-chip-{ticker}", "n_clicks") for ticker in TICKERS],
+        Input("p2-select-all", "n_clicks"),
+        Input("p2-deselect-all", "n_clicks"),
+        State("p2-company-selection", "data"),
+        prevent_initial_call=True
+    )
+    def p2_toggle_companies(*args):
+        selected = list(args[-1])
+        trigger = ctx.triggered_id
+
+        if trigger == "p2-select-all":
+            selected = list(TICKERS)
+
+        elif trigger == "p2-deselect-all":
+            selected = []
+
+        elif trigger and trigger.startswith("p2-chip-"):
+            ticker = trigger.replace("p2-chip-", "")
+
+            if ticker in selected:
+                selected.remove(ticker)
+            else:
+                selected.append(ticker)
+
+        styles = [
+            p2_company_button_style(ticker in selected)
+            for ticker in TICKERS
+        ]
+
+        status = f"{len(selected)} / {len(TICKERS)} selected"
+
+        return selected, *styles, status
+
     # Update Panel 2 when the user switches views, refreshes Yahoo
     # data or changes the universal company selection.
     @app.callback(
@@ -830,12 +949,18 @@ def p2_create_app(selected_tickers=tickers, *, parse_selection, load_valuations=
         Input("view-toggle", "value"),
         Input("valuation-refresh", "n_clicks"),
         Input("p2-url", "search"),
-    )
-    def update_view(view, _refresh, search):
-        chosen = parse_selection(search)
+        Input("p2-company-selection", "data"),
+    ) 
+    def update_view(view, _refresh, search, standalone_selection):
+
+        if standalone:
+            chosen = standalone_selection
+        else:
+            chosen = parse_selection(search)
+
         chosen = list(TICKERS) if chosen is None else chosen
         if not chosen:
-            return html.P("Please select at least one company in the universal selector.", role="status")
+            return html.P("Please select at least one company.", role="status")
         df, failed_tickers = load_valuations(selected_tickers)
         df = df[df["Ticker"].isin(chosen)]
         chart_df = p2_prepare_chart_data(df)
@@ -938,6 +1063,7 @@ def p2_create_app(selected_tickers=tickers, *, parse_selection, load_valuations=
 
 if __name__ == "__main__":
     app = p2_create_app(
-        parse_selection=p2_standalone_selection
+        parse_selection=p2_standalone_selection,
+        standalone=True
     )
     app.run(debug=False)

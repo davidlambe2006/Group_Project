@@ -164,14 +164,12 @@ Each bubble represents one company, with three financial variables determining i
 
 #### How to Use Panel 2
 
-1. **Select companies:** Use the universal company selector at the top of the dashboard to include or exclude companies.
+1. **Select companies:** Use the company selector at the top of the dashboard to include or exclude companies.
 2. **Open Panel 2:** Select the chart from the dashboard overview to access its expanded view.
 3. **Explore the graph:** Hover over bubbles to inspect financial values and compare companies.
 4. **Examine the inset:** Use the zoomed-in chart to compare NVDA, AMD, ASML and PLTR where valid data is available.
 5. **Toggle regression:** Use the **On/Off** buttons to show or hide the regression line and R² statistic.
 6. **Switch to Table:** Select the **Table** tab to inspect the underlying company data, with sortable columns.
-
-**Note:** The universal company selection controls are only available when running the full dashboard through `app.py`. When Panel 2 is launched independently, all ten companies are selected by default.
 
 ---
 
