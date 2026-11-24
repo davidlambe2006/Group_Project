@@ -4,10 +4,10 @@ An interactive Python dashboard exploring AI-related stock performance, corporat
 
 | Panel | Name | Question explored | Main output |
 |---|---|---|---|
-| 1 — AI Stock Performance | Fionn Ó Nuanáin  | How have selected companies performed against market benchmarks? | 3D performance chart and risk statistics |
-| 2 — Capital Investment vs Revenue | Michael Keane | How does company investment relate to revenue? | Bubble chart, regression, and financial table |
-| 3 — AI Boom vs Dot-Com Bubble | David Lambe | How does the AI portfolio compare with the dot-com period? | Historical comparison and illustrative scenarios |
-| 4 — AI Valuation Simulator | Conan Fennell | What future price follows from selected financial assumptions? | Price estimates, scenario comparison, and sensitivity heatmap |
+| 1 - AI Stock Performance | Fionn Ó Nuanáin  | How have selected companies performed against market benchmarks? | 3D performance chart and risk statistics |
+| 2 - Capital Investment vs Revenue | Michael Keane | How does company investment relate to revenue? | Bubble chart, regression, and financial table |
+| 3 - AI Boom vs Dot-Com Bubble | David Lambe | How does the AI portfolio compare with the dot-com period? | Historical comparison and illustrative scenarios |
+| 4 - AI Valuation Simulator | Conan Fennell | What future price follows from selected financial assumptions? | Price estimates, scenario comparison, and sensitivity heatmap |
 
 
 **Dashboard overview:** 
@@ -18,7 +18,7 @@ An interactive Python dashboard exploring AI-related stock performance, corporat
 
 ### What you need
 
-- Python installed. The original project documentation identifies **Python 3.14** as the development version.
+- Python installed (the dashboard was developed using **Python 3.14**).
 - An internet connection to retrieve financial data.
 - A modern browser, such as Chrome, Edge, or Firefox.
 - The extracted project folder. VS Code is optional.
@@ -41,7 +41,7 @@ python --version
 Install the packages used by the supplied application:
 
 ```powershell
-python -m pip install dash plotly yfinance pandas numpy flask
+python -m pip install -r requirements.txt
 ```
 
 Start the dashboard:
@@ -54,7 +54,21 @@ python app.py
 
 The application prints the local address in the terminal. Allow time for the charts to retrieve financial data. **Keep the terminal open while using the dashboard.**
 
-**Startup screenshot:** [Insert the terminal showing successful startup and the local address.]
+### First launch — macOS
+
+1. Extract the ZIP file and open the `Group_Project` folder.
+2. Open the folder in VS Code and select Terminal → New Terminal, or navigate to the folder using Terminal.
+3. Run the following commands separately:
+
+```bash
+python3 --version
+python3 -m pip install -r requirements.txt
+python3 app.py
+```
+
+4. Open [http://127.0.0.1:8050](http://127.0.0.1:8050) in your browser.
+
+Keep the terminal open while using the dashboard.
 
 ### Stopping and opening again
 
@@ -447,13 +461,13 @@ The forecasts depend on an assumed Base return and historical volatility. They s
 
 #### Panel 3 Screenshots
 
-**Figure 3a — AI Boom vs. Dot-Com Bubble**
+**Figure 3 (a) — AI Boom vs. Dot-Com Bubble**
 
 ![Panel 3 main comparison](screenshots/panel3_main.png)
 
 *The expanded Panel 3, showing the universal company selector, performance metrics and 24-month Bull, Base and Bear scenarios.*
 
-**Figure 3b — NASDAQ Dot-Com Crash Detail**
+**Figure 3 (b) — NASDAQ Dot-Com Crash Detail**
 
 ![NASDAQ crash detail](screenshots/panel3_crash.png)
 
@@ -473,7 +487,7 @@ An interactive sensitivity heatmap illustrates how different growth and profit-m
 
 #### How to Use Panel 4
 1. **Select a company:** Choose one of the ten AI-related companies using Panel 4's independent company selector.
-2. **Choose a scenario:** Select Bear, Base or Bull to apply different financial assumptions.The Base scenario remains highlighted with a bold outline for reference, while Bear or Bull are highlighted using a dotted outline if chosen. The Compare Scenarios drop-down explains all 3 scenarios side by side.
+2. **Choose a scenario:** Select Bear, Base or Bull to apply different financial assumptions. The Base scenario remains highlighted with a bold outline for reference, while Bear or Bull are highlighted using a dotted outline if chosen. The Compare Scenarios drop-down explains all 3 scenarios side by side.
 3. **Review the valuation:** Examine the current share price, estimated future price and annualised return.
 4. **Explore the heatmap:** Hover over cells to see how revenue growth and profit margins affect projected returns.
 5. **Refresh data:** Select **Refresh Yahoo data** to retrieve updated financial information.
@@ -600,20 +614,18 @@ Hovering over a cell displays the relevant assumptions, estimated future share p
 
 ---
 
-
 ## 4. Data and implementation
 
 Financial data is retrieved from **Yahoo Finance through yfinance**. The application combines historical prices, financial statements, portfolio calculations, linear regression, and valuation modelling.
 
 - Internet access is required for retrieval; market data is not bundled with the application.
 - Missing source data can prevent charts or calculations from loading.
-- Selected data requests are cached in memory for **15 minutes**.
 - Financial values change between runs; screenshots are dated examples.
 - Historical data and hypothetical scenarios should be interpreted separately.
 
 **Architecture:** `app.py` combines the panel modules and manages navigation. Dash updates outputs when controls change; Plotly draws the charts; pandas and NumPy process data; Flask provides the local web server.
 
-## Project Structure
+### Project Structure
 
 ```text
 Group_Project/
@@ -664,6 +676,5 @@ The dashboard uses the following data sources, libraries and documentation:
 | pandas | [pandas Documentation](https://pandas.pydata.org/docs/) |
 | NumPy | [NumPy Documentation](https://numpy.org/doc/) |
 | Flask | [Flask Documentation](https://flask.palletsprojects.com/) |
-| Matplotlib | [Matplotlib Documentation](https://matplotlib.org/) |
 
 ---
