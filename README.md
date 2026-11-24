@@ -171,6 +171,8 @@ Each bubble represents one company, with three financial variables determining i
 5. **Toggle regression:** Use the **On/Off** buttons to show or hide the regression line and R² statistic.
 6. **Switch to Table:** Select the **Table** tab to inspect the underlying company data, with sortable columns.
 
+**Note:** The universal company selection controls are only available when running the full dashboard through `app.py`. When Panel 2 is launched independently, all ten companies are selected by default.
+
 ---
 
 #### Data Collection and Financial Statement Selection

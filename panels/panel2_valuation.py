@@ -304,7 +304,8 @@ def p2_style_valuation_chart(fig):
 
     # Subtitle
     fig.add_annotation(
-        x=0.59, y=1.2,
+        x=0.59, y=1,
+        yshift=60,
         xref='paper', yref='paper',
         xanchor='center',
         text='Exploring the Relationship Between Capital Expenditure and Annual Revenue',
@@ -314,7 +315,8 @@ def p2_style_valuation_chart(fig):
 
     # Bubble-size explanation
     fig.add_annotation(
-        x=0.59, y=1.15,
+        x=0.59, y=1,
+        yshift=43,
         xref='paper', yref='paper',
         xanchor='center',
         text='Bubble Size = Market Capitalisation ($T)',
