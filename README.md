@@ -98,11 +98,9 @@ Shows how AI-related companies have performed relative to the wider stock market
 | Chart Detail | Panel | Daily, Every 5 Days, Every 20 Days | Every 5 Days |
 | Refresh Yahoo data | Panel | Reloads the latest prices | n/a |
 | Price Scale | Panel | Linear or Log | Linear |
-
 In the dashboard, click a company button in the header to add or remove it. Select All and Deselect All change every selected company at once, and the counter (for example "10 / 10 selected") shows how many are on. Panel 1 shows the companies chosen there. Deselecting all will create a 'Please select at least one AI company' text.
 
 Chart Detail sets how many prices are plotted: Daily uses every trading day, Every 5 Days about one point a week, and Every 20 Days about one a month. Fewer points draw faster and look smoother. The latest price is always included, and total return is not affected.
-
 Price Scale sets how the vertical axis is drawn. Linear spaces the values evenly, so a company that has grown far more than the others, such as NVIDIA over a longer period, can dominate the chart and flatten the rest. Log spaces the values by percentage change, so equal steps up the axis mean equal percentage gains, and every company stays easy to read. Switching the scale only changes how the chart looks. The prices and the total return shown in the cards stay the same.
 
 ### Figure 1(b)
@@ -615,17 +613,29 @@ Financial data is retrieved from **Yahoo Finance through yfinance**. The applica
 
 **Architecture:** `app.py` combines the panel modules and manages navigation. Dash updates outputs when controls change; Plotly draws the charts; pandas and NumPy process data; Flask provides the local web server.
 
+## Project Structure
+
 ```text
 Group_Project/
 ├── app.py
 ├── README.md
 ├── requirements.txt
-└── panels/
-    ├── dashboard_shared.py
-    ├── panel1_stock.py
-    ├── panel2_valuation.py
-    ├── panel3_dotcom.py
-    └── panel4_simulator.py
+├── panels/
+│   ├── dashboard_shared.py
+│   ├── panel1_stock.py
+│   ├── panel2_valuation.py
+│   ├── panel3_dotcom.py
+│   └── panel4_simulator.py
+└── screenshots/
+    ├── final_dashboard.png
+    ├── image.png
+    ├── panel1_dashboard.png
+    ├── panel2_graph_dashboard.png
+    ├── panel2_table_dashboard.png
+    ├── panel3_crash.png
+    ├── panel3_main.png
+    ├── panel4_full.png
+    └── panel4_scenarios.png
 ```
 
 ## 5. Troubleshooting
