@@ -23,7 +23,6 @@ except ImportError:  # Direct execution of a panel demo.
 
 #Dictionary linking stock ticker symbols to company names
 COMPANIES = dict(SHARED_COMPANIES)
-DEFAULT_COMPANIES = list(TICKERS)
 
 # Stock market ETFs used as comparison benchmarks
 BENCHMARKS = {
@@ -53,13 +52,12 @@ STOCK_COLOURS = [
     "#FFFFFF",  # White
     "#A8B9CF"   # Grey
 ]
-CARD_BLUE = CARD
 TEXT_MUTED = "#A8B9CF"
 CYAN = "#20e3e8"
 WHITE = "#f3f5fa"
 MUTED = "#aabed0"
 
-# Panel 4's dropdown theme: dark background, white text, cyan highlight
+# Panel 1's dropdown theme: dark background, white text, cyan highlight
 DROPDOWN_STYLE = {
     "color": WHITE,
     "--Dash-Fill-Inverse-Strong": DARK_BLUE,
@@ -82,18 +80,7 @@ def p1_ticker_colour(ticker, position):
         ticker, STOCK_COLOURS[position % len(STOCK_COLOURS)]
     )
 
-PERIOD_OPTIONS = [
-    "1 Year",
-    "3 Years",
-    "5 Years",
-    "10 Years"
-]
 
-DETAIL_OPTIONS = [
-    "Daily",
-    "Every 5 Days",
-    "Every 20 Days"
-]
 
 # Downloading Stock Data with yfinance
 
@@ -243,7 +230,6 @@ def p1_calculate_statistics(indexed_prices):
 
 
 # INTERACTIVE 3D STOCK PERFORMANCE CHART
-# Framing of the full-size 3D chart. SCENE_DOMAIN_Y is the part of the canvas
 # the 3D scene gets; a smaller gap between the two numbers zooms the drawing out.
 CHART_HEIGHT = 640
 CAMERA_ZOOM = 1.2
@@ -437,121 +423,12 @@ def p1_build_chart_3d(indexed_prices,log_scale=False,legend_clickable=True):
     
     return fig
 
-
-# DASH DASHBOARD AND INTERACTIVE CONTROLS
-
-def p1_create_panel1_layout():
-
-    return html.Div([
-
-        # Dashboard heading
-        html.H2("Panel 1 — AI Stock Performance (3D)"),
-
-        html.P(
-            "How have AI-related companies performed "
-            "relative to the wider stock market?"
-        ),
-
-        # AI company selector
-        html.Label("AI Companies"),
-
-        dcc.Dropdown(
-            id="panel1_companies",
-            options=[
-                {"label": name, "value": ticker}
-                for ticker, name in COMPANIES.items()
-            ],
-            value=DEFAULT_COMPANIES,
-            multi=True,
-            style=DROPDOWN_STYLE
-        ),
-
-        # Three dashboard controls
-        html.Div([
-
-            html.Div([
-                html.Label("Historical Period"),
-
-                dcc.Dropdown(
-                    id="panel1_period",
-                    options=[
-                        "1 Year", "3 Years",
-                        "5 Years", "10 Years"
-                    ],
-                    value="3 Years",
-                    clearable=False,
-                    style=DROPDOWN_STYLE
-                )
-            ], style={"flex": "1", "minWidth": "200px"}),
-
-            html.Div([
-                html.Label("Market Benchmarks"),
-
-                dcc.Dropdown(
-                    id="panel1_benchmarks",
-                    options=[
-                        {"label": name, "value": ticker}
-                        for ticker, name in BENCHMARKS.items()
-                    ],
-                    value=["SPY", "QQQ"],
-                    multi=True,
-                    style=DROPDOWN_STYLE
-                )
-            ], style={"flex": "1", "minWidth": "200px"}),
-
-            html.Div([
-                html.Label("Chart Detail"),
-
-                dcc.Dropdown(
-                    id="panel1_detail",
-                    options=[
-                        "Daily",
-                        "Every 5 Days",
-                        "Every 20 Days"
-                    ],
-                    value="Every 5 Days",
-                    clearable=False,
-                    style=DROPDOWN_STYLE
-                )
-            ], style={"flex": "1", "minWidth": "200px"})
-
-        ], style={
-            "display": "flex",
-            "flexWrap": "wrap",
-            "gap": "20px",
-            "marginTop": "20px",
-            "marginBottom": "25px"
-        }),
-
-        # Chart and statistics will appear here
-        dcc.Loading(
-            html.Div(id="panel1_results"),
-            type="circle"
-        )
-
-    ], style={
-        "backgroundColor": DARK_BLUE,
-        "color": "white",
-        "padding": "30px",
-        "minHeight": "100vh",
-        "fontFamily": "Arial"
-    })
-
-
-# CREATE DASH APPLICATION
-
-app = Dash(__name__, title="AI Boom Dashboard")
-
-app.layout = p1_create_panel1_layout()
-
 # Integrated dashboard
 
 
 def p1_comparison_data(companies, period="3 Years", benchmarks=None, *, load_prices=p1_get_prices):
-    """One real-price/normalisation path for both Panel 1 views.
-
-    Preserve the original lookback, adjusted closes and shared-date indexing.
-    """
+    """ Return prices indexed to 100 for the chosen tickers, plus any with no data."""
+    
     tickers = list(dict.fromkeys(list(companies) + list(benchmarks or [])))
     start = date.today() - timedelta(days=round(int(period.split()[0]) * 365.25))
     prices = load_prices(tickers, start.isoformat(), (date.today() + timedelta(days=1)).isoformat())
@@ -596,6 +473,7 @@ def p1_cached_loader(load_prices):
     return load
 
 def p1_create_app(*, parse_selection, load_prices=p1_get_prices, legend_clickable=True, **kwargs):
+    """Build the Panel 1 Dash app: controls, 3D chart and performance cards."""
     app = Dash(__name__, **kwargs, include_assets_files=False)
     dropdown_style = DROPDOWN_STYLE
     load_prices = p1_cached_loader(load_prices)
@@ -693,6 +571,7 @@ def p1_create_app(*, parse_selection, load_prices=p1_get_prices, legend_clickabl
         Input("p1-url", "search"),
     )
     def use_header_selection(search):
+        """Start from the companies chosen in the dashboard header, or all of them."""
         # Opened from the overview: start from the companies chosen in the header.
         chosen = parse_selection(search)
         return list(TICKERS) if chosen is None else chosen
@@ -707,6 +586,7 @@ def p1_create_app(*, parse_selection, load_prices=p1_get_prices, legend_clickabl
         Input("p1-refresh", "n_clicks"),
     )
     def update(companies, period, benchmarks, detail, scale, _refresh):
+        """Redraw the 3D chart and performance cards when any control changes."""
         if ctx.triggered_id == "p1-refresh":
             load_prices.clear()  # Refresh button forces a new Yahoo download
         if not companies:

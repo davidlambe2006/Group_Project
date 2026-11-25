@@ -80,6 +80,7 @@ def cached_market_data(function):
 
     @wraps(function)
     def wrapped(*args, **kwargs):
+        """Return the cached result if it is still fresh, otherwise call the loader again."""
         key = repr((args, kwargs))
         try:
             trigger = ctx.triggered_id or ""
@@ -227,6 +228,8 @@ def compact_figure(figure, panel):
     return figure
 
 def message_figure(message):
+    """Return a blank figure showing a single message, e.g. while data loads."""
+
     figure = go.Figure()
     figure.update_layout(
         paper_bgcolor=NAVY,
@@ -532,6 +535,7 @@ def create_app():
         prevent_initial_call=True,
     )
     def toggle_company(*args):
+        """Update the selected companies when a chip, Select All or Deselect All is clicked."""
         *_clicks, current = args
         trigger = ctx.triggered_id
         if trigger == "select-all":
@@ -574,6 +578,7 @@ def create_app():
         return chosen
 
     def register_preview(number):
+        """Register the callback that draws one overview chart."""
         uses_selection = number in GLOBAL_PANELS
         inputs = [Input("load-data", "n_intervals")]
         if uses_selection:
@@ -607,6 +612,7 @@ def create_app():
         prevent_initial_call=True,
     )
     def navigate(*args):
+        """Switch between the overview grid and a full-size panel page."""
         *_clicks, applied, open_panel = args
         trigger = ctx.triggered_id
         chosen = global_normalise_selection(applied)
