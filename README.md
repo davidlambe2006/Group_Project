@@ -1,4 +1,4 @@
-# AI Boom Dashboard
+# AI Boom Dashboard (Group 18)
 
 An interactive Python dashboard exploring AI-related stock performance, corporate investment, historical market comparisons, and hypothetical future valuations. It runs on your computer and opens in your browser.
 
