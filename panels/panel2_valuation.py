@@ -490,6 +490,8 @@ def p2_add_regression_controls(fig, r_squared):
         fig.add_annotation(
             x=1.11, y=0.16,
             xref='paper', yref='paper',
+            xanchor='center',
+            yanchor='middle',
             text='Regression unavailable',
             showarrow=False,
             font=dict(size=10, color='white')
