@@ -643,14 +643,14 @@ Group_Project/
 │   └── panel4_simulator.py
 └── screenshots/
     ├── final_dashboard.png
-    ├── image.png
-    ├── panel1_dashboard.png
+    ├── Panel1Dash.png
     ├── panel2_graph_dashboard.png
     ├── panel2_table_dashboard.png
     ├── panel3_crash.png
     ├── panel3_main.png
     ├── panel4_full.png
-    └── panel4_scenarios.png
+    ├── panel4_scenarios.png
+    └── Ticker selector.png
 ```
 
 ## 5. Troubleshooting
