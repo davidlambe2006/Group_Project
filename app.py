@@ -183,7 +183,8 @@ def compact_figure(figure, panel):
             camera=dict(eye=dict(x=0.35 * zoom, y=-1.99 * zoom, z=0.99 * zoom),
             center=dict(x=0, y=0, z=-0.3))),
             legend=dict(orientation="h", x=0.5, xanchor="center", y=1.0,
-                        yanchor="bottom", font=dict(size=13, color="white"), bgcolor=SHARED_NAVY))
+                        yanchor="bottom", font=dict(size=13, color="white"), bgcolor=SHARED_NAVY,
+                        itemclick=False, itemdoubleclick=False))
         figure.update_scenes(
             xaxis_tickfont_size=11,
             zaxis_tickfont_size=11,
@@ -279,7 +280,7 @@ def create_app():
     server = Flask(__name__)
     panel_apps = []
     factories = (
-        partial(p1_create_app, parse_selection=global_parse_selection, load_prices=stock_get_prices),
+        partial(p1_create_app, parse_selection=global_parse_selection, load_prices=stock_get_prices,legend_clickable=False),
         partial(p2_create_app, parse_selection=global_parse_selection, load_valuations=p2_load_valuation_data),
         p3_create_app,
     )
@@ -313,6 +314,14 @@ def create_app():
                 "color": WHITE,
             },
         )
+    # Panel 1's legend is display-only in the dashboard, so drop Plotly's hand cursor.
+    # Added after apply_theme so the theme can't overwrite it.
+    panel_apps[0].index_string = panel_apps[0].index_string.replace(
+        "</head>",
+        "<style>.legend .legendtoggle, .legend .traces "
+        "{ cursor: default !important; }</style></head>",
+        1,
+    )
     app = Dash(
         __name__,
         server=server,

@@ -251,7 +251,7 @@ CAMERA_CENTER_Z = -0.38
 
 
 
-def p1_build_chart_3d(indexed_prices,log_scale=False):
+def p1_build_chart_3d(indexed_prices,log_scale=False,legend_clickable=True):
     """
     Create an interactive 3D chart of indexed stock performance.
 
@@ -414,7 +414,9 @@ def p1_build_chart_3d(indexed_prices,log_scale=False):
             orientation="v",
             x=0.99,
             xanchor="right",
-            y=0.98
+            y=0.98,
+            itemclick="toggle" if legend_clickable else False,
+            itemdoubleclick="toggleothers" if legend_clickable else False
         ),
 
         height=CHART_HEIGHT,
@@ -593,7 +595,7 @@ def p1_cached_loader(load_prices):
     load.clear = cache.clear
     return load
 
-def p1_create_app(*, parse_selection, load_prices=p1_get_prices, **kwargs):
+def p1_create_app(*, parse_selection, load_prices=p1_get_prices, legend_clickable=True, **kwargs):
     app = Dash(__name__, **kwargs, include_assets_files=False)
     dropdown_style = DROPDOWN_STYLE
     load_prices = p1_cached_loader(load_prices)
@@ -767,7 +769,7 @@ def p1_create_app(*, parse_selection, load_prices=p1_get_prices, **kwargs):
                 html.Div(
                     [
                         dcc.Graph(
-                            figure=p1_build_chart_3d(sampled, log_scale=(scale == "Log")),
+                            figure=p1_build_chart_3d(sampled, log_scale=(scale == "Log"),legend_clickable=legend_clickable),
                             config={"responsive": True, "displaylogo": False},
                             style={"minWidth": 0,"height": f"{CHART_HEIGHT}px"},
                         ),

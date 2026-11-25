@@ -100,7 +100,7 @@ Shows how AI-related companies have performed relative to the wider stock market
 
 ### Figure 1(a)
 [Panel 1 inside the dashboard with all 10 companies selected in the header, a 3-year period, and SPY and QQQ as benchmarks](docs/panel1-dashboard.png)
-![Panel 1 running through dashboard](screenshots/panel1_dashboard.png)
+![alt text](screenshots/Panel1Dash.png)
 
 #### Controls
 
@@ -112,15 +112,18 @@ Shows how AI-related companies have performed relative to the wider stock market
 | Chart Detail | Panel | Daily, Every 5 Days, Every 20 Days | Every 5 Days |
 | Refresh Yahoo data | Panel | Reloads the latest prices | n/a |
 | Price Scale | Panel | Linear or Log | Linear |
+
+
 In the dashboard, click a company button in the header to add or remove it. Select All and Deselect All change every selected company at once, and the counter (for example "10 / 10 selected") shows how many are on. Panel 1 shows the companies chosen there. Deselecting all will create a 'Please select at least one AI company' text.
 
 Chart Detail sets how many prices are plotted: Daily uses every trading day, Every 5 Days about one point a week, and Every 20 Days about one a month. Fewer points draw faster and look smoother. The latest price is always included, and total return is not affected.
 Price Scale sets how the vertical axis is drawn. Linear spaces the values evenly, so a company that has grown far more than the others, such as NVIDIA over a longer period, can dominate the chart and flatten the rest. Log spaces the values by percentage change, so equal steps up the axis mean equal percentage gains, and every company stays easy to read. Switching the scale only changes how the chart looks. The prices and the total return shown in the cards stay the same.
 
-### Figure 1(b)
-[Panel 1 running on its own, with the AI Companies dropdown](image/panel1-standalone.png)
+#### Panel1, Run on its own
+If running panel1 individually there is a toggle right of the chart in which you can click once to remove the ticker from the chart and double click to isolate that ticker on its own in the chart.
 
-![Panel 1 Running on its own](screenshots/image.png)
+![alt text](screenshots/Ticker%20selector.png)
+
 
 #### Reading the chart
 
